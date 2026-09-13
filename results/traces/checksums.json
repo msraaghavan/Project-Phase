@@ -1,0 +1,95 @@
+{
+  "config": {
+    "model": {
+      "backend": "tiny",
+      "name": "tiny-gqa-4L8H",
+      "hf_model_id": null,
+      "d_model": 128,
+      "n_layers": 4,
+      "n_heads": 8,
+      "n_kv_heads": 2,
+      "d_ff": 256,
+      "max_seq_len": 512,
+      "rope_theta": 10000.0,
+      "dropout": 0.0
+    },
+    "metrics": {
+      "z_star": 1.0,
+      "lam": 0.3,
+      "p_star": 0.1,
+      "top_k": 8,
+      "smooth_window": 8,
+      "kappa": 1.0,
+      "pagerank_damping": 0.85,
+      "sink_positions": 4,
+      "fdr_alpha": 0.05,
+      "n_reservoirs": 4,
+      "probe_folds": 5
+    },
+    "intervention": {
+      "modes": [
+        "ablate",
+        "perturb",
+        "gate"
+      ],
+      "epsilon": 1.0,
+      "gate": 0.1,
+      "max_ppl_increase": 0.05,
+      "max_acc_drop": 0.02,
+      "n_bootstrap": 2000,
+      "alpha": 0.05
+    },
+    "run": {
+      "seeds": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "pressures": [
+        0.0,
+        0.125,
+        0.25,
+        0.375,
+        0.5,
+        0.625,
+        0.75,
+        0.875,
+        1.0
+      ],
+      "arms": [
+        "shared-kv",
+        "text-only",
+        "isolated"
+      ],
+      "n_turns": 8,
+      "max_new_tokens": 10,
+      "n_agents": 2,
+      "raw_kv_sample_rate": 0.05,
+      "train_steps": 1500,
+      "train_batch": 16
+    },
+    "out_dir": "results",
+    "probe_suite": "synthetic-bbq",
+    "master_seed": 1234
+  },
+  "config_sha256": "a82942b3862376c2c24d78c1f7bf07f33e1ed0e325c6d503a967de84c414e95b",
+  "git_commit": "nogit",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "torch": "2.13.0+cpu",
+  "numpy": "2.5.1",
+  "master_seed": 1234,
+  "files": {
+    "kvRecord-0000.parquet": "7e4944e8d560328f9cae9050a75245e6014bb02cbcfcf21019a8a8b40dc9acf2",
+    "kvRecord-0001.parquet": "86f6c82f6e1230c49db3ce68ec2b1de0491a458701fa16b0d25bbf87ba2ec2d6",
+    "kvRecord-0002.parquet": "7dafb0a3499e06c8c6885f51cf4fea07b7bb9447bc1057e5a336930952b3ef7c",
+    "kvRecord-0003.parquet": "6e7de3d43e3df44e573f80b601b928e039d0331e22b730d64f7386dfcaed7ea9",
+    "kvRecord-0004.parquet": "ff28bd1ed8979f0774141f33a9c8d6305620209980cfa16066f17156e9728fcc",
+    "kvRecord-0005.parquet": "33b3f67888586a617bed4abb460ea4d15e3c01c95e742f7dfc3812ec41836682",
+    "kvRecord-0006.parquet": "ae932a9c6ab2607c89d1bf7c5bf7de5df4ca9332e996b6ed26471724665ca88f",
+    "index.sqlite": "bbe0aa6308c9d257af21ae0f843d49a0c45d47dd75aeded2e40f355da6a9cea4"
+  },
+  "nConversations": 135
+}
