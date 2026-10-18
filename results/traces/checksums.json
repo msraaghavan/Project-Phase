@@ -67,21 +67,22 @@
       "max_new_tokens": 10,
       "n_agents": 2,
       "raw_kv_sample_rate": 0.05,
-      "train_steps": 1500,
-      "train_batch": 16
+      "train_steps": 400,
+      "train_batch": 32
     },
     "out_dir": "results",
     "probe_suite": "synthetic-bbq",
     "master_seed": 1234
   },
-  "config_sha256": "a82942b3862376c2c24d78c1f7bf07f33e1ed0e325c6d503a967de84c414e95b",
-  "git_commit": "nogit",
+  "config_sha256": "e7d49aab61ccd73f9c2b0a65fc08e8916e9ba38928c1deb6c2c3bc4dcba880b6",
+  "git_commit": "b5f523f",
   "python": "3.14.6",
-  "platform": "Windows-11-10.0.26200-SP0",
+  "platform": "Windows-11-10.0.26300-SP0",
   "torch": "2.13.0+cpu",
   "numpy": "2.5.1",
   "master_seed": 1234,
   "files": {
+    "attnEdge.parquet": "94b1792a96bb8dc409d257757b60c1f32f011e2fdfab4f7a94ebffc71a7c6da6",
     "kvRecord-0000.parquet": "7e4944e8d560328f9cae9050a75245e6014bb02cbcfcf21019a8a8b40dc9acf2",
     "kvRecord-0001.parquet": "86f6c82f6e1230c49db3ce68ec2b1de0491a458701fa16b0d25bbf87ba2ec2d6",
     "kvRecord-0002.parquet": "7dafb0a3499e06c8c6885f51cf4fea07b7bb9447bc1057e5a336930952b3ef7c",
@@ -89,7 +90,13 @@
     "kvRecord-0004.parquet": "ff28bd1ed8979f0774141f33a9c8d6305620209980cfa16066f17156e9728fcc",
     "kvRecord-0005.parquet": "33b3f67888586a617bed4abb460ea4d15e3c01c95e742f7dfc3812ec41836682",
     "kvRecord-0006.parquet": "ae932a9c6ab2607c89d1bf7c5bf7de5df4ca9332e996b6ed26471724665ca88f",
-    "index.sqlite": "bbe0aa6308c9d257af21ae0f843d49a0c45d47dd75aeded2e40f355da6a9cea4"
+    "isolated_p0.000_s0_crows-0-2.npz": "ecad740f1cbaea50aadb28f8292e9a10a9a563bdc7a8cacaf004e6fbac1eedbb",
+    "isolated_p1.000_s4_crows-3-2.npz": "125bf1da446b0309a49b298955cb68b8533188af52aa682f6c60c851949d1c31",
+    "shared-kv_p0.000_s0_crows-0-2.npz": "1672458a10ee219da80c457e116fd5f8ac1a6689a1169c41443f8415e4d0120e",
+    "shared-kv_p1.000_s4_crows-3-2.npz": "e0616cdb8d155e839399b287d3e3f455849b1d9a12a70802bed30eda96c964c7",
+    "text-only_p0.000_s0_crows-0-2.npz": "ecc6701f2df2c00144b1c04afd98b41d21cede220d6ffb12762b4ef725485a51",
+    "text-only_p1.000_s4_crows-3-2.npz": "318f9cea76fbe686ec7f4d075734ab7148c82dc5f7c5eee9b5b7d9348e6de8c0",
+    "index.sqlite": "12c6297dab29eb3674610b922bcf6623c1fdc82a1dcb35ec16e42c7ad2d15048"
   },
   "nConversations": 135
 }

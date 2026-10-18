@@ -2,9 +2,13 @@
 
     python -m rcm.cli run   [--config configs/default.yaml] [--quick]
     python -m rcm.cli report [--results results]
+    python -m rcm.cli site   [--results results]
+    python -m rcm.cli serve  [--results results] [--port 8000]
 
 ``run`` executes the full pipeline; ``report`` regenerates figures and the
-dashboard from an existing ``results.json``.
+dashboard from an existing ``results.json``; ``site`` rebuilds the data
+embedded in the web page (``rcm/report/static/index.html``); ``serve`` starts the web app
+(demo, findings, JSON API) on http://127.0.0.1:8000.
 """
 
 from __future__ import annotations
@@ -34,7 +38,30 @@ def main(argv=None) -> int:
     r.add_argument("--out", default=None)
     p = sub.add_parser("report", help="regenerate figures and dashboard")
     p.add_argument("--results", default="results")
+    d = sub.add_parser("site", help="rebuild the data inside the web page")
+    d.add_argument("--results", default="results")
+    w = sub.add_parser("serve", help="start the web app on localhost")
+    w.add_argument("--results", default="results")
+    w.add_argument("--port", type=int, default=8000)
     args = ap.parse_args(argv)
+
+    if args.cmd in ("serve", "site"):
+        import os
+
+        os.environ["RCM_RESULTS"] = args.results
+        from rcm.report import site_data
+
+        if args.cmd == "site" or not site_data.is_built():
+            print("building the web page's data (one-off, a few minutes) ...")
+            site_data.build()
+        if args.cmd == "site":
+            return 0
+
+        import uvicorn
+
+        print(f"open http://127.0.0.1:{args.port}  (Ctrl+C to stop)")
+        uvicorn.run("rcm.report.api:app", host="127.0.0.1", port=args.port, log_level="warning")
+        return 0
 
     if args.cmd == "run":
         from rcm.pipeline import run_pipeline

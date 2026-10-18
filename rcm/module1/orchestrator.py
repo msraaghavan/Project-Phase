@@ -40,13 +40,12 @@ from rcm.config import (
     set_all_seeds,
 )
 from rcm.module1.scoring import (
-    bias_index,
     bias_logit_gap,
     coherence_score,
     hallucinated,
     hallucination_persistence,
 )
-from rcm.probes import BOS, BiasProbe, FactProbe, ProbeBank, encode
+from rcm.probes import BiasProbe, FactProbe, ProbeBank
 
 SYSTEM_PROMPT = "they said one and one met there ."
 RECEIVER_PROMPT = "they said"
@@ -206,8 +205,8 @@ class ConversationOrchestrator:
         # -- seeding: identical in every arm, so it cancels in MC and TC ---
         intro = f"{probe.group_a} and {probe.group_b} met there ."
         for ag in (receiver, sender):
-            self._write(ag, [BOS] + encode(SYSTEM_PROMPT), 0, CH_SYSTEM)
-            self._write(ag, encode(intro), 0, CH_PROBE)
+            self._write(ag, self.adapter.bos_ids() + self.adapter.encode(SYSTEM_PROMPT), 0, CH_SYSTEM)
+            self._write(ag, self.adapter.encode(intro), 0, CH_PROBE)
 
         n_rounds = max(1, self.cfg.run.n_turns // 2)
         plan = self.context_plan(pressure, n_rounds * n_ctx_per_turn, rng)
@@ -223,18 +222,20 @@ class ConversationOrchestrator:
             items = plan[r * n_ctx_per_turn:(r + 1) * n_ctx_per_turn]
             for stereotypical in items:
                 self._write(
-                    sender, encode(probe.context_sentence(stereotypical, rng)), turn_idx, CH_PROBE
+                    sender, self.adapter.encode(probe.context_sentence(stereotypical, rng)), turn_idx,
+                    CH_PROBE,
                 )
-            out_s = self._generate(sender, encode(RECEIVER_PROMPT), turn_idx)
+            out_s = self._generate(sender, self.adapter.encode(RECEIVER_PROMPT), turn_idx)
             end = sender.cache.get_seq_length(0)
             sender.last_turn_span = (start, end)
             sender.last_text_ids = out_s.token_ids
-            b_s = bias_index(self.adapter, sender.cache, probe)
+            gap = bias_logit_gap(self.adapter, sender.cache, probe)
+            b_s = float(np.tanh(gap / 2.0))
             sender.bias_series.append(b_s)
             turns.append(TurnRecord(
                 convId=conv_id, turnIdx=turn_idx, agentId=sender.agent_id, role=sender.role,
                 tokenStart=start, tokenEnd=end, biasScore=b_s,
-                logitGap=bias_logit_gap(self.adapter, sender.cache, probe),
+                logitGap=gap,
                 ppl=coherence_score(out_s.logits, out_s.token_ids),
                 hallucinated=hallucinated(self.adapter, sender.cache, fact),
                 text=out_s.text,
@@ -246,11 +247,12 @@ class ConversationOrchestrator:
 
             # ---------------- receiver turn ----------------------------
             start = receiver.cache.get_seq_length(0)
-            out_r = self._generate(receiver, encode(RECEIVER_PROMPT), turn_idx, intervention)
+            out_r = self._generate(receiver, self.adapter.encode(RECEIVER_PROMPT), turn_idx, intervention)
             end = receiver.cache.get_seq_length(0)
             receiver.last_turn_span = (start, end)
             receiver.last_text_ids = out_r.token_ids
-            b_r = bias_index(self.adapter, receiver.cache, probe)
+            gap = bias_logit_gap(self.adapter, receiver.cache, probe)
+            b_r = float(np.tanh(gap / 2.0))
             receiver.bias_series.append(b_r)
             flag = hallucinated(self.adapter, receiver.cache, fact)
             halluc_flags.append(flag)
@@ -259,7 +261,7 @@ class ConversationOrchestrator:
             turns.append(TurnRecord(
                 convId=conv_id, turnIdx=turn_idx, agentId=receiver.agent_id, role=receiver.role,
                 tokenStart=start, tokenEnd=end, biasScore=b_r,
-                logitGap=bias_logit_gap(self.adapter, receiver.cache, probe),
+                logitGap=gap,
                 ppl=ppl, hallucinated=flag, text=out_r.text,
             ))
             turn_idx += 1
@@ -267,7 +269,7 @@ class ConversationOrchestrator:
         stats = receiver.tap.finalize(receiver.cache.get_seq_length(0))
         sender_stats = sender.tap.finalize(sender.cache.get_seq_length(0))
         final_bias = receiver.bias_series[-1] if receiver.bias_series else 0.0
-        sampled = rng.random() < self.cfg.run.raw_kv_sample_rate
+        sampled = raw_kv_selected(self.cfg, arm, pressure, seed)
 
         return ConversationTrace(
             convId=conv_id,
@@ -320,6 +322,22 @@ class ConversationOrchestrator:
             # them; they become visible to every later query, which is the point.
             return n
         raise ValueError(arm)
+
+
+def raw_kv_selected(cfg: ExperimentConfig, arm: str, pressure: float, seed: int) -> bool:
+    """Whether this sweep cell's raw K/V tensors are dumped (stratified sample).
+
+    Within every arm, ``round(rate x cells)`` cells are taken at evenly spaced
+    points of the (pressure, seed) grid -- always including the first and the
+    last -- so each arm is represented at low and high pressure.  Off-grid runs
+    (replays, demos) are never dumped.
+    """
+    grid = [(float(p), int(s)) for p in cfg.run.pressures for s in cfg.run.seeds]
+    if arm not in cfg.run.arms or (float(pressure), int(seed)) not in grid:
+        return False
+    n_take = max(1, round(cfg.run.raw_kv_sample_rate * len(grid)))
+    picks = {int(round(i)) for i in np.linspace(0, len(grid) - 1, n_take)}
+    return grid.index((float(pressure), int(seed))) in picks
 
 
 def describe_trace(trace: ConversationTrace) -> str:

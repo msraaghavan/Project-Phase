@@ -178,7 +178,8 @@ def run_pipeline(cfg: ExperimentConfig, verbose: bool = True) -> dict[str, Any]:
             "frac_conversations_with_novel": float(np.mean([n > 0 for n in n_novel])),
         }
     for k, tr in traces.items():
-        for tok, c in attractor_token_profile(receiver_sets[k], tr.token_ids()).items():
+        for tok, c in attractor_token_profile(receiver_sets[k], tr.token_ids(),
+                                                adapter.token_text).items():
             profile_total[tok] += c
         for name, v in sink_baseline_comparison(metrics[k], cfg.metrics).items():
             sink_cmp[name].append(v)
@@ -356,6 +357,8 @@ def run_pipeline(cfg: ExperimentConfig, verbose: bool = True) -> dict[str, Any]:
     example = {
         "convId": ex.convId,
         "tokens": [tr for tr in (ex.provenance[t]["tokenId"] for t in range(ex.stats["seq_len"]))],
+        "token_text": [adapter.token_text(ex.provenance[t]["tokenId"])
+                       for t in range(ex.stats["seq_len"])],
         "channels": [ex.provenance[t]["channel"] for t in range(ex.stats["seq_len"])],
         "turnIdx": [ex.provenance[t]["turnIdx"] for t in range(ex.stats["seq_len"])],
         "metrics": {k: v.tolist() for k, v in metrics[example_key].as_arrays().items()},

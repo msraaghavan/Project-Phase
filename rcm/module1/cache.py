@@ -94,6 +94,25 @@ class ProvenanceMixin:
     def provenance_frame(self) -> list[dict[str, Any]]:
         return [p.as_row() for p in self.provenance]
 
+    def _stamp_peer(self, peer, positions, new_positions) -> None:
+        """Provenance for entries transplanted from ``peer`` (shared-KV arm)."""
+        prev_channel, prev_agent = self._channel, self._agent_id
+        self._channel = CH_PEER
+        for i, src in enumerate(positions):
+            src_prov = peer.provenance[src]
+            self.provenance.append(
+                KVProvenance(
+                    position=new_positions[i],
+                    turn_idx=self._turn_idx,
+                    agent_id=self._agent_id,
+                    channel=CH_PEER,
+                    token_id=src_prov.token_id,
+                    source_position=src,
+                )
+            )
+            self._token_ids.append(src_prov.token_id)
+        self._channel, self._agent_id = prev_channel, prev_agent
+
 
 class TracingCache(ProvenanceMixin):
     """Self-contained KV cache with provenance stamping.
@@ -214,22 +233,7 @@ class TracingCache(ProvenanceMixin):
             pv = peer.values(layer)[:, positions, :]
             rotated = adapter.rope_reindex(pk, positions, new_positions)
             self.update(rotated, pv, layer)
-        prev_channel, prev_agent = self._channel, self._agent_id
-        self._channel = CH_PEER
-        for i, src in enumerate(positions):
-            src_prov = peer.provenance[src]
-            self.provenance.append(
-                KVProvenance(
-                    position=new_positions[i],
-                    turn_idx=self._turn_idx,
-                    agent_id=self._agent_id,
-                    channel=CH_PEER,
-                    token_id=src_prov.token_id,
-                    source_position=src,
-                )
-            )
-            self._token_ids.append(src_prov.token_id)
-        self._channel, self._agent_id = prev_channel, prev_agent
+        self._stamp_peer(peer, positions, new_positions)
         return len(positions)
 
     # -- diagnostics -----------------------------------------------------

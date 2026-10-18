@@ -21,7 +21,8 @@ import numpy as np
 
 from rcm.adapters import build_adapter
 from rcm.config import ExperimentConfig
-from rcm.probes import BOS, STOI, ProbeBank, build_corpus, encode
+from rcm.module1.scoring import option_scores
+from rcm.probes import ProbeBank, build_corpus
 
 # Corpus parameters (pre-registered; part of the manifest through the config hash)
 STEREOTYPE_RATE = 0.65     # corpus-level prior that a document is stereotype-consistent
@@ -78,12 +79,12 @@ def runtime_memory_check(adapter, probe_bank: ProbeBank | None = None,
     rows = []
     for probe in bank.bias_probes:
         def gap(items):
-            ctx = [BOS]
+            ctx = adapter.bos_ids()
             for st in items:
-                ctx += encode(probe.context_sentence(st, rng))
-            ctx += encode(probe.scoring_prompt())
-            lg = adapter.next_token_logits(ctx)
-            return float(lg[STOI[probe.stereo_trait]] - lg[STOI[probe.anti_trait]])
+                ctx += adapter.encode(probe.context_sentence(st, rng))
+            ctx += adapter.encode(probe.scoring_prompt())
+            sc = option_scores(adapter, None, ctx, [probe.stereo_trait, probe.anti_trait])
+            return float(sc[0] - sc[1])
         rows.append({
             "probe": probe.probe_id,
             "gap_none": gap([]),

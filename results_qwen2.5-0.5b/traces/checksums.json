@@ -1,0 +1,102 @@
+{
+  "config": {
+    "model": {
+      "backend": "hf",
+      "name": "qwen2.5-0.5b",
+      "hf_model_id": "Qwen/Qwen2.5-0.5B-Instruct",
+      "d_model": 128,
+      "n_layers": 4,
+      "n_heads": 8,
+      "n_kv_heads": 2,
+      "d_ff": 256,
+      "max_seq_len": 1024,
+      "rope_theta": 10000.0,
+      "dropout": 0.0
+    },
+    "metrics": {
+      "z_star": 1.0,
+      "lam": 0.3,
+      "p_star": 0.1,
+      "top_k": 8,
+      "smooth_window": 8,
+      "kappa": 1.0,
+      "pagerank_damping": 0.85,
+      "sink_positions": 4,
+      "fdr_alpha": 0.05,
+      "n_reservoirs": 4,
+      "probe_folds": 5
+    },
+    "intervention": {
+      "modes": [
+        "ablate",
+        "perturb",
+        "gate"
+      ],
+      "epsilon": 1.0,
+      "gate": 0.1,
+      "max_ppl_increase": 0.05,
+      "max_acc_drop": 0.02,
+      "n_bootstrap": 2000,
+      "alpha": 0.05
+    },
+    "run": {
+      "seeds": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "pressures": [
+        0.0,
+        0.125,
+        0.25,
+        0.375,
+        0.5,
+        0.625,
+        0.75,
+        0.875,
+        1.0
+      ],
+      "arms": [
+        "shared-kv",
+        "text-only",
+        "isolated"
+      ],
+      "n_turns": 8,
+      "max_new_tokens": 10,
+      "n_agents": 2,
+      "raw_kv_sample_rate": 0.05,
+      "train_steps": 400,
+      "train_batch": 32
+    },
+    "out_dir": "results_qwen2.5-0.5b",
+    "probe_suite": "synthetic-bbq",
+    "master_seed": 1234
+  },
+  "config_sha256": "1f7ffbff40922cb738896eb89c2d5e412e36f60a9b5c8c28f2e49613bb01e3f4",
+  "git_commit": "b5f523f",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "torch": "2.13.0+cu130",
+  "numpy": "2.5.1",
+  "master_seed": 1234,
+  "files": {
+    "attnEdge.parquet": "01b8afade8f5ca0e16a40561f4a7177a4126b95658ad4d6aa8b8a357f3c3f712",
+    "kvRecord-0000.parquet": "e7b9f29c79fbe9d1cfac60e44b5fad8a50fed026f3f2269d29698d0f54187fbc",
+    "kvRecord-0001.parquet": "4aa751bcf2f3e7ccb7bab07fd812242c28308bc8e2717a24e7644863de1e48ab",
+    "kvRecord-0002.parquet": "8463f3a59916fedde07749da8188b83f6253fb327833c22a2550836647b4076a",
+    "kvRecord-0003.parquet": "199e0ac1f95104d2e6c2c280f97da9bd9081b1c24d29beb1f32e27f20d0a1cc7",
+    "kvRecord-0004.parquet": "e46dd36e7dbfe7d6499f89f7cb756622699cd6647ad1341e598e93d46b212586",
+    "kvRecord-0005.parquet": "84d1534604ed0610689a1d3123bac78903e468eceb44c31b1817ae78c98d4b80",
+    "kvRecord-0006.parquet": "806967443eae33a61bf744298052c815239eb6dd5797a230b8aed9332f6fdf12",
+    "isolated_p0.000_s0_crows-0-2.npz": "600e91859dd2d7ab163c28c7a68e6f6642ef6a8fc061929c3ddfb3c94cd68bf6",
+    "isolated_p1.000_s4_crows-3-2.npz": "f08c004633c41fa7b6e7a1b669b5bcbfa8a57ac9d24beb521e61c7782513ac9d",
+    "shared-kv_p0.000_s0_crows-0-2.npz": "55c5196d40811e713ab310d577103eaac5e7ab824290b9b112cb60df4ceff7b6",
+    "shared-kv_p1.000_s4_crows-3-2.npz": "19ea90e9a7c672bc8b1ca4200f6b2d55023a154ac4cd60b012dba1ead2dd21bb",
+    "text-only_p0.000_s0_crows-0-2.npz": "fc7b913589606e626231ec7768734894d74e23dd4bb91ba23f89a33952d883f1",
+    "text-only_p1.000_s4_crows-3-2.npz": "2d4c82cfe667111fda4164c8a9c63aef8aadd74a5c26c547c7f3a61de7a121b4",
+    "index.sqlite": "10787d4394aa5d7dd669c955460c81eb12c2321a0cffa775dd8810d26c35c26e"
+  },
+  "nConversations": 135
+}

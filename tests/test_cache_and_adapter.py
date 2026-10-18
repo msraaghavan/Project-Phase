@@ -85,6 +85,9 @@ def test_gate_equals_logit_bias_and_ablate_removes_mass(adapter):
     """gate(g) post-softmax == adding log g pre-softmax; ablate zeroes the targets."""
     ids = [BOS] + encode("the g1a person is neg1 . the g1b person is pos1 .")
     targets = {(0, 0): [2, 3], (2, 1): [5]}
+    tap0 = adapter.new_tap()
+    adapter.forward(ids, adapter.new_cache("clean"), tap=tap0)
+    clean = tap0.finalize()["mass"]
     cache = adapter.new_cache("x")
     tap = adapter.new_tap()
     adapter.forward(ids, cache, InterventionSpec("gate", targets, gate=0.2), tap=tap)
@@ -98,7 +101,12 @@ def test_gate_equals_logit_bias_and_ablate_removes_mass(adapter):
         assert abl[0, h, 2] == 0 and abl[0, h, 3] == 0
     for h in adapter.query_heads_of(1):
         assert abl[2, h, 5] == 0
-    assert gated[0, 4, 2] > 0                         # head 4 reads kv-head 1: not a target
+    # gating lowers the targeted heads' mass on the targets; layer 0's other
+    # kv-head sees identical inputs, so its attention must not move at all
+    for h in adapter.query_heads_of(0):
+        assert 0 < gated[0, h, 2] < clean[0, h, 2] and 0 < gated[0, h, 3] < clean[0, h, 3]
+    for h in adapter.query_heads_of(1):
+        assert np.allclose(gated[0, h], clean[0, h]) and np.allclose(abl[0, h], clean[0, h])
     # logit-bias formulation reproduces gating row by row
     q, k = torch.randn(3, 8), torch.randn(3, 8)
     s = q @ k.T
@@ -110,18 +118,28 @@ def test_gate_equals_logit_bias_and_ablate_removes_mass(adapter):
     assert torch.allclose(a, torch.softmax(s2, -1), atol=1e-6)
 
 
-def test_perturb_removes_direction(adapter):
+def test_perturb_removes_direction_at_read_time(adapter):
+    """The edit projects the bias direction out of the targeted value vectors only,
+    and only inside the forward pass that carries it: the stored cache is untouched."""
     ids = [BOS] + encode("the g2a person is neg2 .")
     direction = np.random.default_rng(0).normal(size=adapter.head_dim)
-    w_hat = direction / np.linalg.norm(direction)
-    clean = adapter.new_cache("c")
-    adapter.forward(ids, clean)
-    v_before = clean.values(1)[0, 3].numpy().copy()
+    w_hat = torch.as_tensor(direction / np.linalg.norm(direction), dtype=torch.float32)
     spec = InterventionSpec("perturb", {(1, 0): [3]}, {(1, 0): direction}, epsilon=1.0)
-    # the tiny adapter applies the projection at read time; check the math directly
-    v_after = v_before - (v_before @ w_hat) * w_hat
-    assert abs(v_after @ w_hat) < 1e-5
     assert spec.is_active() and spec.n_entries() == 1
+    cache = adapter.new_cache("c")
+    adapter.forward(ids, cache)
+    v = cache.values(1)                                           # [kv_heads, T, head_dim]
+    v_eff = adapter.model.blocks[1].attn._perturb_values(v, spec)
+    assert abs(float(v_eff[0, 3] @ w_hat)) < 1e-5                 # direction removed ...
+    assert torch.allclose(v_eff[0, 3], v[0, 3] - (v[0, 3] @ w_hat) * w_hat, atol=1e-6)
+    untouched = torch.ones(v.shape[:2], dtype=torch.bool)
+    untouched[0, 3] = False
+    assert torch.equal(v_eff[untouched], v[untouched])            # ... and nothing else moves
+    before = cache.values(1).clone()
+    plain = adapter.next_token_logits(encode("they said"), cache)
+    edited = adapter.next_token_logits(encode("they said"), cache, spec)
+    assert torch.equal(cache.values(1), before)                   # read-time only
+    assert not np.allclose(plain, edited)
 
 
 def test_hf_adapter_on_random_llama():

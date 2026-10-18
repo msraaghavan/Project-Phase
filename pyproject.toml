@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rcm"
+version = "1.1.0"
+description = "Runtime Computational Memory: KV-cache instrumentation, attractor analysis and causal KV-only intervention for transformer language models"
+readme = { text = "23CSE498 Project Phase II, Team D10.", content-type = "text/plain" }
+requires-python = ">=3.10"
+dependencies = [
+    "numpy", "scipy", "pandas", "pyarrow", "duckdb", "scikit-learn", "matplotlib",
+    "plotly", "torch", "pyyaml", "fastapi", "uvicorn",
+]
+
+[project.optional-dependencies]
+hf = ["transformers>=4.56", "huggingface_hub"]
+test = ["pytest", "httpx", "networkx"]
+
+[project.scripts]
+rcm = "rcm.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["rcm*"]
+
+[tool.setuptools.package-data]
+"rcm.report" = ["static/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]

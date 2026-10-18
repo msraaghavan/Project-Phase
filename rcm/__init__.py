@@ -15,6 +15,6 @@ Everything is driven by a single :class:`rcm.config.ExperimentConfig`, and every
 run is fully reproducible from its recorded manifest.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 __all__ = ["__version__"]

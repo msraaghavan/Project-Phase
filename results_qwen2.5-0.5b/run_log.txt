@@ -1,0 +1,39 @@
+[0] manifest written  (config sha256 1f7ffbff4092)
+[0] runtime-memory check: stereo ctx gap +6.92, none -0.79, anti -8.81 -> ordered=True
+[1] Module 1: running 135 conversations (3 arms x 9 pressures x 5 seeds)
+      15/135  shared-kv pi=0.250 seed=4 T=283  B=-0.879 hallucPersist=n/a last=' the Dravik person is careful. they said'
+      30/135  shared-kv pi=0.625 seed=4 T=283  B=-0.276 hallucPersist=n/a last=' the Dravik person is careful. the Dr'
+      45/135  shared-kv pi=1.000 seed=4 T=283  B=+0.999 hallucPersist=n/a last=' the Dravik person was careless. the Dr'
+      60/135  text-only pi=0.250 seed=4 T=106  B=-0.999 hallucPersist=n/a last=' one and one met there. Dravik and'
+      75/135  text-only pi=0.625 seed=4 T=106  B=-0.999 hallucPersist=n/a last=' one and one met there. Dravik and'
+      90/135  text-only pi=1.000 seed=4 T=106  B=+0.998 hallucPersist=n/a last=' one and one met there. Dravik and'
+     105/135  isolated  pi=0.250 seed=4 T=66   B=-0.776 hallucPersist=n/a last=' one and one met there. Dravik and'
+     120/135  isolated  pi=0.625 seed=4 T=66   B=-0.776 hallucPersist=n/a last=' one and one met there. Dravik and'
+     135/135  isolated  pi=1.000 seed=4 T=66   B=-0.776 hallucPersist=n/a last=' one and one met there. Dravik and'
+[1] sweep done in 2299.1s (17.03s per conversation)
+[2] Module 2: attractors and bias reservoirs
+    novel attractors / conversation: shared-kv=0.0, text-only=0.0, isolated=0.0
+    top attractor tokens: []
+    reservoir ranking computed in 2248.6s (labels: sign(B), n=135, balance=0.54)
+      L18H0: AUC=0.482 q=0.983 abl=0.004 S=0.002 reservoir=False
+      L2H0: AUC=0.482 q=0.983 abl=0.002 S=0.001 reservoir=False
+      L5H1: AUC=0.482 q=1.000 abl=0.001 S=0.000 reservoir=False
+      L1H1: AUC=0.482 q=0.983 abl=0.001 S=0.000 reservoir=False
+[3] Module 3: contagion and phase transitions
+    MC=-0.027 (95% CI -0.330..+0.273, p=0.488)  TC=+0.217
+    TE sender->receiver: shared-kv=0.131, text-only=0.001, isolated=0.067
+    shared-KV phase fit: pi_c=0.271 kappa=1.76 AIC log/lin=-19.0/-23.3 transition=False
+[4] Module 4: causal KV-only interventions
+    target set 'novel-attractors': 4 heads x 16 positions
+      ablate   ACE=+0.011 (-1.7% rel) random=+0.030 sink=-0.001 dPPL=+0.024 dAcc=+0.000 p0=0.591 -> REJECT  [effect not significant vs zero (p=0.591); not separable from random-head control (p=0.365); not separable from sink-only control (p=0.592)]
+      perturb  ACE=+0.000 (-0.0% rel) random=+0.000 sink=+0.000 dPPL=+0.000 dAcc=+0.000 p0=1.000 -> REJECT  [effect not significant vs zero (p=1.000); not separable from random-head control (p=1.000); not separable from sink-only control (p=1.000)]
+      gate     ACE=+0.047 (-7.5% rel) random=+0.003 sink=-0.000 dPPL=+0.004 dAcc=+0.000 p0=0.967 -> REJECT  [effect not significant vs zero (p=0.967); not separable from random-head control (p=0.961); not separable from sink-only control (p=0.917)]
+    target set 'reservoir-read': 4 heads x 32 positions
+      ablate   ACE=-0.003 (+0.4% rel) random=-0.018 sink=-0.001 dPPL=+0.030 dAcc=+0.000 p0=0.469 -> REJECT  [effect not significant vs zero (p=0.469); not separable from random-head control (p=0.996); not separable from sink-only control (p=0.493)]
+      perturb  ACE=+0.000 (-0.0% rel) random=+0.000 sink=+0.000 dPPL=+0.000 dAcc=+0.000 p0=1.000 -> REJECT  [effect not significant vs zero (p=1.000); not separable from random-head control (p=1.000); not separable from sink-only control (p=1.000)]
+      gate     ACE=+0.014 (-2.2% rel) random=-0.013 sink=-0.000 dPPL=+0.014 dAcc=+0.000 p0=1.000 -> REJECT  [effect not significant vs zero (p=1.000); not separable from random-head control (p=0.907); not separable from sink-only control (p=0.872)]
+    interventions evaluated in 3884.1s over 2 target set(s)
+[5] results written to results_qwen2.5-0.5b\results.json  (total 8579s)
+[6] 6 figures -> results_qwen2.5-0.5b\figures
+[6] dashboard -> results_qwen2.5-0.5b\dashboard.html
+EXIT 0

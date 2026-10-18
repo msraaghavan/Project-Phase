@@ -56,6 +56,32 @@ VOCAB_SIZE = len(VOCAB)
 PAD, BOS, EOS, SEP = STOI["<pad>"], STOI["<bos>"], STOI["<eos>"], STOI["<sep>"]
 
 
+# Surface forms used when the model under study has its own tokenizer (the
+# ``hf`` backend).  Group names are fictional, so a pretrained model brings no
+# prior association to them and the stereotype direction stays known by
+# construction; traits and facts are ordinary English.
+SURFACE: dict[str, str] = {
+    "g0a": "Vorlan", "g0b": "Tessic", "g1a": "Brimor", "g1b": "Quenda",
+    "g2a": "Zalith", "g2b": "Morvane", "g3a": "Dravik", "g3b": "Olmeth",
+    "neg0": "hostile", "neg1": "lazy", "neg2": "dishonest", "neg3": "careless",
+    "neg4": "rude", "neg5": "selfish",
+    "pos0": "friendly", "pos1": "hardworking", "pos2": "honest", "pos3": "careful",
+    "pos4": "polite", "pos5": "generous",
+    "q0": "what is the capital of France", "q1": "which planet is the largest",
+    "q2": "how many legs does a spider have", "q3": "what colour is a clear daytime sky",
+    "a0": "Paris", "a1": "Jupiter", "a2": "eight", "a3": "blue",
+    "answer": "? the answer is",
+}
+
+
+def render(text: str) -> str:
+    """Closed-vocabulary sentence -> natural English (see :data:`SURFACE`)."""
+    out = " ".join(SURFACE.get(t, t) for t in text.split())
+    for mark in (".", ",", "?"):
+        out = out.replace(" " + mark, mark)
+    return out
+
+
 def encode(text: str) -> list[int]:
     """Whitespace tokenizer over the closed vocabulary."""
     return [STOI[t] for t in text.split()]

@@ -8,6 +8,8 @@ from typing import Any
 
 import numpy as np
 
+from rcm import probes
+
 
 @dataclass
 class InterventionSpec:
@@ -128,6 +130,27 @@ class ModelAdapter(ABC):
         transplanted entry must be rotated by the position delta or it lands at
         the wrong place in the attention geometry.
         """
+
+    # -- text codec ------------------------------------------------------
+    # Probes are written in the closed testbed vocabulary.  The reference model
+    # reads them directly; an adapter over a real tokenizer overrides these
+    # methods to render the same sentences in its own vocabulary.
+    def encode(self, text: str) -> list[int]:
+        return probes.encode(text)
+
+    def bos_ids(self) -> list[int]:
+        return [probes.BOS]
+
+    def word_ids(self, word: str) -> list[int]:
+        """Token ids of one answer word as it appears mid-sentence."""
+        return [probes.STOI[word]]
+
+    def token_text(self, token_id: int) -> str:
+        return probes.ITOS.get(int(token_id), "?")
+
+    def continuation_logprob(self, prompt_ids, cont_ids, cache=None, intervention=None) -> float:
+        """Summed log-probability of ``cont_ids`` after ``prompt_ids`` (cache untouched)."""
+        raise NotImplementedError
 
     # -- convenience -----------------------------------------------------
     def describe(self) -> dict[str, Any]:

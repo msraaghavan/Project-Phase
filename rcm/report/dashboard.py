@@ -25,7 +25,7 @@ def build_dashboard(results: dict | str | Path, path: str | Path) -> Path:
     ex = results["example_conversation"]
     a = np.asarray(ex["alpha_bar"])
     T = a.shape[0]
-    toks = [ITOS.get(int(t), "?") for t in ex["tokens"]]
+    toks = ex.get("token_text") or [ITOS.get(int(t), "?") for t in ex["tokens"]]
     hover = [f"t={i} '{toks[i]}' ({ex['channels'][i]}, turn {ex['turnIdx'][i]})" for i in range(T)]
 
     fig = make_subplots(

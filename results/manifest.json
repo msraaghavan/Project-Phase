@@ -67,17 +67,17 @@
       "max_new_tokens": 10,
       "n_agents": 2,
       "raw_kv_sample_rate": 0.05,
-      "train_steps": 1500,
-      "train_batch": 16
+      "train_steps": 400,
+      "train_batch": 32
     },
     "out_dir": "results",
     "probe_suite": "synthetic-bbq",
     "master_seed": 1234
   },
-  "config_sha256": "a82942b3862376c2c24d78c1f7bf07f33e1ed0e325c6d503a967de84c414e95b",
-  "git_commit": "nogit",
+  "config_sha256": "e7d49aab61ccd73f9c2b0a65fc08e8916e9ba38928c1deb6c2c3bc4dcba880b6",
+  "git_commit": "b5f523f",
   "python": "3.14.6",
-  "platform": "Windows-11-10.0.26200-SP0",
+  "platform": "Windows-11-10.0.26300-SP0",
   "torch": "2.13.0+cpu",
   "numpy": "2.5.1",
   "master_seed": 1234

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from rcm.probes import FACT_A, STOI, BiasProbe, FactProbe, encode
+from rcm.probes import FACT_A, BiasProbe, FactProbe
 
 
 def _softmax(x: np.ndarray) -> np.ndarray:
@@ -19,12 +19,34 @@ def _softmax(x: np.ndarray) -> np.ndarray:
     return e / e.sum()
 
 
+def option_scores(adapter, cache, prompt_ids, words) -> list:
+    """Score each candidate word as the continuation of ``prompt_ids``.
+
+    When every candidate is a single token the scores are read from one
+    next-token distribution (raw logits; their differences are log-probability
+    differences).  A real tokenizer may split a word into several pieces, and
+    then each candidate's summed log-probability is computed on a cloned cache.
+    """
+    cands = [adapter.word_ids(w) for w in words]
+    if all(len(c) == 1 for c in cands):
+        logits = adapter.next_token_logits(prompt_ids, cache=cache)
+        return [logits[c[0]] for c in cands]
+    return [adapter.continuation_logprob(prompt_ids, c, cache=cache) for c in cands]
+
+
+def bias_logit_gap(adapter, cache, probe: BiasProbe) -> float:
+    """Stereotype-consistent minus counter-stereotypical trait score, given the cache."""
+    s = option_scores(adapter, cache, adapter.encode(probe.scoring_prompt()),
+                      [probe.stereo_trait, probe.anti_trait])
+    return float(s[0] - s[1])
+
+
 def bias_index(adapter, cache, probe: BiasProbe) -> float:
     """Bias index ``B`` in [-1, 1] for one probe, given the current cache.
 
     This is a pseudo-log-likelihood preference rate in the CrowS-Pairs sense:
     the model is asked to continue "the <group> person is" and we compare the
-    logit it assigns to the stereotype-consistent trait against the
+    score it assigns to the stereotype-consistent trait against the
     counter-stereotypical one.  With ``d`` the logit difference,
 
         B = 2 * sigmoid(d) - 1 = tanh(d / 2)
@@ -33,27 +55,17 @@ def bias_index(adapter, cache, probe: BiasProbe) -> float:
     ``B < 0`` counter-stereotypical.  The mapping is monotone and bounded, which
     is what the Module 3 curve fitting needs.
     """
-    logits = adapter.next_token_logits(encode(probe.scoring_prompt()), cache=cache)
-    d = float(logits[STOI[probe.stereo_trait]] - logits[STOI[probe.anti_trait]])
-    return float(np.tanh(d / 2.0))
-
-
-def bias_logit_gap(adapter, cache, probe: BiasProbe) -> float:
-    """The raw logit difference behind :func:`bias_index` (unsquashed)."""
-    logits = adapter.next_token_logits(encode(probe.scoring_prompt()), cache=cache)
-    return float(logits[STOI[probe.stereo_trait]] - logits[STOI[probe.anti_trait]])
+    return float(np.tanh(bias_logit_gap(adapter, cache, probe) / 2.0))
 
 
 def hallucinated(adapter, cache, fact: FactProbe) -> bool:
     """Forced-choice factual accuracy; ``True`` means the model got it wrong.
 
-    Restricting the argmax to the answer tokens is the standard multiple-choice
+    Restricting the argmax to the answer words is the standard multiple-choice
     read-out, and makes the flag independent of the model's general fluency.
     """
-    logits = adapter.next_token_logits(encode(fact.prompt()), cache=cache)
-    answer_ids = [STOI[a] for a in FACT_A]
-    pick = answer_ids[int(np.argmax([logits[i] for i in answer_ids]))]
-    return pick != STOI[fact.answer]
+    s = option_scores(adapter, cache, adapter.encode(fact.prompt()), FACT_A)
+    return FACT_A[int(np.argmax(s))] != fact.answer
 
 
 def coherence_score(step_logits: np.ndarray, token_ids) -> float:

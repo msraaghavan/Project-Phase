@@ -26,7 +26,9 @@ without it installed.
 
 from __future__ import annotations
 
+import copy
 import math
+import os
 
 import numpy as np
 import torch
@@ -35,6 +37,7 @@ import torch.nn.functional as F
 from rcm.adapters.base import InterventionSpec, ModelAdapter, TurnOutput
 from rcm.module1.cache import ProvenanceMixin
 from rcm.module1.hooks import AttentionTap
+from rcm.probes import SURFACE, render
 
 try:  # pragma: no cover - exercised only when transformers is installed
     from transformers import AutoModelForCausalLM, AutoTokenizer, DynamicCache
@@ -78,6 +81,36 @@ class HFTracingCache(DynamicCache, ProvenanceMixin):  # type: ignore[misc,valid-
         return np.stack(
             [self.layer_values(i).float().cpu().numpy() for i in range(len(self.layers))], axis=0
         )
+
+    def key_norms(self) -> np.ndarray:
+        return np.stack([self.layer_keys(i).float().norm(dim=-1).cpu().numpy()
+                         for i in range(len(self.layers))], axis=0)
+
+    def value_norms(self) -> np.ndarray:
+        return np.stack([self.layer_values(i).float().norm(dim=-1).cpu().numpy()
+                         for i in range(len(self.layers))], axis=0)
+
+    def clone(self, conv_id: str | None = None) -> "HFTracingCache":
+        """Deep copy, so scoring and replays never touch the live memory."""
+        out = copy.deepcopy(self)
+        if conv_id:
+            out.conv_id = conv_id
+        return out
+
+    def graft(self, peer: "HFTracingCache", positions: list[int], adapter) -> int:
+        """Transplant peer entries with RoPE re-indexing (shared-KV arm)."""
+        if not positions:
+            return 0
+        base = self.get_seq_length()
+        new_positions = list(range(base, base + len(positions)))
+        self._pending_tokens = None
+        for layer in range(len(peer.layers)):
+            pk = peer.layers[layer].keys[:, :, positions, :]        # [1, Hkv, n, dh]
+            pv = peer.layers[layer].values[:, :, positions, :]
+            rotated = adapter.rope_reindex(pk, positions, new_positions)
+            super().update(rotated.contiguous(), pv.clone(), layer)
+        self._stamp_peer(peer, positions, new_positions)
+        return len(positions)
 
 
 class _AttentionMaskInjector:
@@ -133,9 +166,10 @@ class HFAdapter(ModelAdapter):
         if model is None:
             if not model_id:
                 raise ValueError("model.hf_model_id must be set for the 'hf' backend")
+            device, dtype = _device_and_dtype()
             model = AutoModelForCausalLM.from_pretrained(
-                model_id, dtype=torch.bfloat16, attn_implementation="eager", device_map="auto",
-            )
+                model_id, dtype=dtype, attn_implementation="eager",
+            ).to(device)
             tokenizer = tokenizer or AutoTokenizer.from_pretrained(model_id)
         self.model = model.eval()
         self.tokenizer = tokenizer
@@ -146,7 +180,13 @@ class HFAdapter(ModelAdapter):
         self._n_heads = int(hc.num_attention_heads)
         self._n_kv_heads = int(getattr(hc, "num_key_value_heads", hc.num_attention_heads))
         self._head_dim = int(getattr(hc, "head_dim", hc.hidden_size // hc.num_attention_heads))
-        self._rope_theta = float(getattr(hc, "rope_theta", 10000.0))
+        rope = getattr(hc, "rope_parameters", None) or {}
+        self._rope_theta = float(getattr(hc, "rope_theta", None) or rope.get("rope_theta") or 10000.0)
+        tok = self.tokenizer
+        self._special_ids = sorted(set(tok.all_special_ids)) if tok is not None else []
+        start = None if tok is None else (tok.bos_token_id if tok.bos_token_id is not None
+                                          else tok.eos_token_id)
+        self._bos = [] if start is None else [int(start)]
         self._pos_start = 0
 
     # -- geometry --------------------------------------------------------
@@ -169,6 +209,23 @@ class HFAdapter(ModelAdapter):
     @property
     def name(self) -> str:
         return self.cfg.model.hf_model_id or self.model.config.model_type
+
+    def describe(self) -> dict:
+        p = next(self.model.parameters())
+        return super().describe() | {"device": str(p.device), "dtype": str(p.dtype).replace("torch.", "")}
+
+    # -- text codec: the probes rendered in the model's own vocabulary ------
+    def encode(self, text: str) -> list[int]:
+        return self.tokenizer.encode(" " + render(text), add_special_tokens=False)
+
+    def bos_ids(self) -> list[int]:
+        return list(self._bos)
+
+    def word_ids(self, word: str) -> list[int]:
+        return self.tokenizer.encode(" " + SURFACE.get(word, word), add_special_tokens=False)
+
+    def token_text(self, token_id: int) -> str:
+        return self.tokenizer.decode([int(token_id)])
 
     # -- execution -------------------------------------------------------
     def new_cache(self, conv_id: str = "conv") -> HFTracingCache:
@@ -196,8 +253,9 @@ class HFAdapter(ModelAdapter):
         self._pos_start = cache.get_seq_length() if cache is not None else 0
         if cache is not None:
             cache.set_pending_tokens(ids[0].tolist())
+        undo = []
         if intervention is not None and intervention.mode == "perturb" and cache is not None:
-            apply_perturbation_inplace(cache, intervention, self.n_layers)
+            undo = apply_perturbation_inplace(cache, intervention, self.n_layers)
         handles = self._install_hooks(intervention)
         try:
             out = self.model(
@@ -209,9 +267,12 @@ class HFAdapter(ModelAdapter):
         finally:
             for h in handles:
                 h.remove()
+            for layer, kv_head, idx, original in undo:     # the edit is read-time only
+                cache.layers[layer].values[0][kv_head, idx, :] = original
         if capture and tap is not None:
-            for layer_idx, attn in enumerate(out.attentions):
-                tap.observe(layer_idx, attn[0].float(), self._pos_start)
+            attns = torch.stack([a[0] for a in out.attentions]).float().cpu()  # one transfer
+            for layer_idx in range(attns.shape[0]):
+                tap.observe(layer_idx, attns[layer_idx], self._pos_start)
         return out.logits[0]
 
     @torch.no_grad()
@@ -222,13 +283,15 @@ class HFAdapter(ModelAdapter):
         generated: list[int] = []
         step_logits: list[np.ndarray] = []
         for step in range(max_new_tokens):
-            step_logits.append(logits[-1].float().cpu().numpy())
+            row = logits[-1].float().clone()
+            row[self._special_ids] = float("-inf")       # a turn never ends the document
+            step_logits.append(row.cpu().numpy())
             if forced_ids is not None:
                 if step >= len(forced_ids):
                     break
                 nxt = int(forced_ids[step])
             else:
-                nxt = int(torch.argmax(logits[-1]).item())
+                nxt = int(torch.argmax(row).item())
             generated.append(nxt)
             logits = self.forward([nxt], cache, intervention, capture=True, tap=tap)
         return TurnOutput(
@@ -240,9 +303,19 @@ class HFAdapter(ModelAdapter):
 
     @torch.no_grad()
     def next_token_logits(self, prompt_ids, cache=None, intervention=None) -> np.ndarray:
-        ids = torch.as_tensor(prompt_ids, dtype=torch.long).view(1, -1).to(self.model.device)
-        out = self.model(input_ids=ids, use_cache=False)
-        return out.logits[0, -1].float().cpu().numpy()
+        """Logits after ``prompt_ids``, conditioned on a *copy* of ``cache``."""
+        work = cache.clone("probe") if cache is not None else None
+        logits = self.forward(list(prompt_ids), work, intervention, capture=False)
+        return logits[-1].float().cpu().numpy()
+
+    @torch.no_grad()
+    def continuation_logprob(self, prompt_ids, cont_ids, cache=None, intervention=None) -> float:
+        work = cache.clone("probe") if cache is not None else None
+        prompt_ids, cont_ids = list(prompt_ids), list(cont_ids)
+        logits = self.forward(prompt_ids + cont_ids, work, intervention, capture=False)
+        logp = F.log_softmax(logits.float(), dim=-1)
+        start = len(prompt_ids) - 1
+        return float(sum(logp[start + i, t].item() for i, t in enumerate(cont_ids)))
 
     @torch.no_grad()
     def sequence_logprob(self, token_ids, intervention=None) -> float:
@@ -274,14 +347,15 @@ class HFAdapter(ModelAdapter):
         return torch.cat([x1 * cos - x2 * sin, x1 * sin + x2 * cos], dim=-1)
 
 
-def apply_perturbation_inplace(cache, spec: InterventionSpec, n_layers: int) -> int:
+def apply_perturbation_inplace(cache, spec: InterventionSpec, n_layers: int) -> list:
     """Project the bias direction out of the target value vectors.
 
     This is the literal reading of "perturbation projects the probe-identified
-    bias direction out of the target value vectors".  Callers run it on a cloned
-    cache so the baseline replay is untouched.
+    bias direction out of the target value vectors".  Returns the overwritten
+    slices so :meth:`HFAdapter.forward` can restore them after the pass, which
+    makes the edit read-time only, exactly as in the reference adapter.
     """
-    edited = 0
+    undo = []
     for (layer, kv_head), positions in spec.targets.items():
         if layer >= n_layers:
             continue
@@ -295,7 +369,23 @@ def apply_perturbation_inplace(cache, spec: InterventionSpec, n_layers: int) -> 
         w_t = torch.as_tensor(np.asarray(w), dtype=values.dtype, device=values.device)
         w_hat = w_t / w_t.norm().clamp_min(1e-12)
         sel = values[kv_head, idx, :]
+        undo.append((layer, kv_head, idx, sel.clone()))
         proj = (sel @ w_hat).unsqueeze(-1) * w_hat.unsqueeze(0)
         values[kv_head, idx, :] = sel - spec.epsilon * proj
-        edited += len(idx)
-    return edited
+    return undo
+
+
+def _device_and_dtype():
+    """GPU when available (bf16 on Ampere+, fp16 before); float32 on CPU.
+
+    ``RCM_DEVICE`` and ``RCM_DTYPE`` override the choice, e.g. ``RCM_DTYPE=float32``
+    for a small model on a pre-Ampere card.
+    """
+    device = os.environ.get("RCM_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")
+    if os.environ.get("RCM_DTYPE"):
+        dtype = getattr(torch, os.environ["RCM_DTYPE"])
+    elif device.startswith("cuda"):
+        dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
+    else:
+        dtype = torch.float32
+    return device, dtype

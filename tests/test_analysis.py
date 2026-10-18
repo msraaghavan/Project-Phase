@@ -1,13 +1,16 @@
 """Modules 3 and 4: contagion decomposition, transfer entropy, phase fit,
 changepoint, BH-FDR and the intervention acceptance rule."""
 
+from types import SimpleNamespace
+
 import numpy as np
 
+from rcm.adapters.base import InterventionSpec
 from rcm.config import ARM_CONTROL, ARM_SHARED, ARM_TEXT, InterventionConfig
 from rcm.module2.reservoirs import benjamini_hochberg
 from rcm.module3.contagion import contagion_decomposition, transfer_entropy
 from rcm.module3.phase import changepoint_1d, fit_phase_transition, logistic_curve
-from rcm.module4.evaluate import CellOutcome, InterventionOutcome
+from rcm.module4.evaluate import CellOutcome, evaluate_intervention
 
 
 def test_contagion_is_a_residual():
@@ -62,12 +65,48 @@ def test_benjamini_hochberg():
     assert np.all(np.diff(q) >= 0)
 
 
-def test_acceptance_rule_rejects_on_coherence_budget():
-    cfg = InterventionConfig()
-    out = InterventionOutcome(mode="ablate", delta_ppl=0.30, delta_acc=0.0, p_vs_zero=0.001,
-                              p_vs_random=0.001, p_vs_sink=0.001)
-    ppl_ok = out.delta_ppl <= cfg.max_ppl_increase
-    assert not ppl_ok                         # 30 % perplexity increase breaks the 5 % budget
+class FakeReplay:
+    """Stands in for the orchestrator: every cell has a fixed bias, and each edit
+    shifts it (and optionally perplexity / factual accuracy) by a known amount."""
+
+    def __init__(self, edits):
+        self.edits = edits                    # id(spec) -> (d_bias, ppl, n_wrong of 10)
+
+    def run(self, arm, pressure, seed, intervention=None):
+        d_bias, ppl, wrong = self.edits.get(id(intervention), (0.0, 2.0, 0))
+        return SimpleNamespace(final_bias=0.4 + 0.03 * seed + d_bias,
+                               turns=[SimpleNamespace(role="receiver", ppl=ppl)],
+                               hallucination_flags=[i < wrong for i in range(10)])
+
+
+def _judge(edit, random_edit=(-0.02, 2.0, 0), sink_edit=(-0.02, 2.0, 0)):
+    spec = InterventionSpec("ablate", {(0, 0): [5]})
+    rnd, sink = InterventionSpec("ablate", {(1, 1): [5]}), InterventionSpec("ablate", {(0, 0): [0]})
+    fake = FakeReplay({id(spec): edit, id(rnd): random_edit, id(sink): sink_edit})
+    cells = [("shared-kv", 1.0, s) for s in range(10)]
+    return evaluate_intervention(fake, cells, spec, {"random": rnd, "sink": sink}, InterventionConfig())
+
+
+def test_acceptance_rule_accepts_a_clean_effect():
+    out = _judge((-0.2, 2.0, 0))
+    assert out.accepted and out.reasons == []
+    assert np.isclose(out.ace, -0.2) and np.isclose(out.ace_random, -0.02)
+    assert np.isclose(out.relative_reduction, 0.2 / np.mean([0.4 + 0.03 * s for s in range(10)]))
+    assert out.p_vs_zero < 0.05 and out.p_vs_random < 0.05 and out.coherence_ok
+
+
+def test_acceptance_rule_rejections():
+    """Each failure mode is caught and named, as reported on the results page."""
+    forgets = _judge((-0.2, 2.0, 1))                       # accuracy 1.0 -> 0.9: over the 2-point limit
+    assert not forgets.accepted and np.isclose(forgets.delta_acc, -0.1)
+    assert any("coherence budget violated: dAcc" in r for r in forgets.reasons)
+    garbles = _judge((-0.2, 2.6, 0))                       # perplexity +30 %: over the 5 % limit
+    assert not garbles.accepted and np.isclose(garbles.delta_ppl, 0.3)
+    assert any("dPPL" in r for r in garbles.reasons)
+    placebo = _judge((-0.2, 2.0, 0), random_edit=(-0.2, 2.0, 0))
+    assert not placebo.accepted and any("random-head control" in r for r in placebo.reasons)
+    nothing = _judge((0.0, 2.0, 0))
+    assert not nothing.accepted and any("not significant vs zero" in r for r in nothing.reasons)
     c = CellOutcome("shared-kv", 1.0, 0, bias_base=0.6, bias_int=0.3, ppl_base=2.0, ppl_int=2.0,
                     acc_base=1.0, acc_int=1.0)
     assert np.isclose(c.delta_bias, -0.3)

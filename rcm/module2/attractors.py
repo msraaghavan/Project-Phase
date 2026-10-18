@@ -68,7 +68,7 @@ def detect_attractors(
     )
 
 
-def attractor_token_profile(sets: AttractorSets, token_ids) -> dict[str, int]:
+def attractor_token_profile(sets: AttractorSets, token_ids, label=None) -> dict[str, int]:
     """Which vocabulary items the novel attractors sit on.
 
     In the controlled testbed the answer is checkable by construction: the
@@ -79,7 +79,7 @@ def attractor_token_profile(sets: AttractorSets, token_ids) -> dict[str, int]:
     profile: dict[str, int] = {}
     for t in sets.novel:
         if t < len(token_ids):
-            tok = ITOS[int(token_ids[t])]
+            tok = label(int(token_ids[t])) if label else ITOS[int(token_ids[t])]
             profile[tok] = profile.get(tok, 0) + 1
     return dict(sorted(profile.items(), key=lambda kv: -kv[1]))
 
