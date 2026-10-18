@@ -1,0 +1,216 @@
+\chapter{Proposed Methodology}
+\section{Design (architecture) or conceptual framework}
+The methodology treats the KV cache as an object that can be measured and edited, and proceeds in four stages: \emph{instrument} the cache, \emph{measure} how entries are used, \emph{attribute} behaviour to specific entries and heads, and \emph{intervene} on those entries to test the attribution causally. The framework that realises these stages is organised as six layers, shown in Figure~\ref{fig:arch}. Data flows from top to bottom, from the definition of an experiment to its evaluation, and the causal intervention engine closes the loop by writing back into the running model, editing only the cache during a seed-matched replay of a recorded conversation. The model weights are frozen in every layer.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  ttl/.style={draw, rounded corners=2pt, fill=#1, text width=3.25cm, minimum height=1.55cm, align=left, font=\small, inner sep=5pt},
+  cnt/.style={draw, rounded corners=2pt, text width=9.0cm, minimum height=1.55cm, align=left, font=\footnotesize, inner sep=5pt},
+  arr/.style={-{Stealth[length=2.2mm]}, thick}
+]
+\node[ttl=blue!10] (t1) {\textbf{Experiment control}\\Module 1};
+\node[cnt, right=1mm of t1] (c1) {Probe bank (fictional groups, traits, factual questions); two-agent orchestrator; memory arm (shared cache, text only, isolated); semantic pressure $\pi$; seed and configuration manifest.};
+\node[ttl=blue!10, below=4mm of t1] (t2) {\textbf{Instrumented model runtime}\\Module 1};
+\node[cnt, right=1mm of t2] (c2) {Frozen model behind an adapter (reference transformer or Hugging Face model in eager attention); tracing cache that stamps every write; attention tap that reduces per-head attention online.};
+\node[ttl=blue!10, below=4mm of t2] (t3) {\textbf{Provenance and trace store}\\Module 1};
+\node[cnt, right=1mm of t3] (c3) {Provenance per entry (layer, head, position, turn, agent, channel); SQLite index; Parquet fact table; stratified raw key/value dumps; checksummed manifest.};
+\node[ttl=teal!12, below=4mm of t3] (t4) {\textbf{Memory analysis engine}\\Modules 2 and 3};
+\node[cnt, right=1mm of t4] (c4) {Attractor metrics (reuse, lifetime, persistence, centrality) with sinks held out; bias-reservoir probes with false-discovery control; contagion decomposition, transfer entropy and phase fit.};
+\node[ttl=orange!15, below=4mm of t4] (t5) {\textbf{Causal intervention engine}\\Module 4};
+\node[cnt, right=1mm of t5] (c5) {Ablation, perturbation and gating of selected cache entries during seed-matched replay; random-head and sink-only negative controls.};
+\node[ttl=orange!15, below=4mm of t5] (t6) {\textbf{Evaluation, reporting and demonstration}\\Module 4};
+\node[cnt, right=1mm of t6] (c6) {Bias index, factual accuracy and perplexity; acceptance rule with coherence budget; figures, technical dashboard, trace service and public demonstration website.};
+\foreach \a/\b in {t1/t2,t2/t3,t3/t4,t4/t5,t5/t6} \draw[arr] (\a.south) -- (\b.north);
+\draw[arr, dashed, orange!70!black] (c5.east) -- ++(0.45,0) |- (c2.east);
+\node[font=\footnotesize, align=center, rotate=90] at ($(c2.east)!0.5!(c5.east) + (0.75,0)$) {cache-only edits during replay};
+\end{tikzpicture}
+\caption{Layered architecture of the runtime-memory framework. The dashed path is the closed intervention loop: the only write back into the model runtime is an edit of KV cache entries during replay.}\label{fig:arch}
+\end{figure}
+
+The \textbf{experiment control layer} defines what is run. It draws a bias probe and a factual probe for each conversation, assigns the sender and receiver roles, and sets the two experimental factors: the memory arm and the semantic pressure~$\pi$, the fraction of the sender's context statements that are consistent with the stereotype. Because every run is fully described by its configuration and seed, any conversation can be replayed exactly.
+
+The \textbf{instrumented model runtime} hosts the frozen model behind a common adapter interface. For Hugging Face models, a tracing cache subclasses the library's dynamic cache so that every write is intercepted, and attention runs in eager mode because fused attention kernels do not expose attention weights. An attention tap reduces the per-head attention distributions online to the statistics required by the metrics, so that full attention tensors never need to be stored.
+
+The \textbf{provenance and trace store} makes the later analyses possible. Every cache entry carries its layer, head, absolute position, turn, agent and source channel, and the store keeps per-position statistics for every conversation and raw tensors for a stratified sample. The \textbf{memory analysis engine} consumes traces offline to detect attractors, localise reservoirs and analyse contagion. The \textbf{causal intervention engine} is the only layer that writes into the runtime, and the \textbf{evaluation layer} scores replays, applies the acceptance rule and produces the figures, the technical dashboard and the public website.
+
+The four software modules correspond to the four members of the team. Module~1, instrumentation, provenance and the conversation harness, was developed by S~Kunal Achintya Reddy; Module~2, attractors and bias reservoirs, by V~Sriman Vashishta; Module~3, contagion and phase-transition analysis, by Raaghavan~M~S; and Module~4, causal intervention, evaluation and the dashboard, by B~Nithilesh. Integration, testing and the demonstration website were carried out jointly.
+
+\section{Proposed approach and procedure}
+\subsection{Models under study}
+Two models were studied, with complementary roles (Table~\ref{tab:models}). The \emph{reference transformer} is a small decoder-only model with the same building blocks as current open models: grouped-query attention~\cite{ainslie2023gqa}, rotary position embeddings~\cite{su2024roformer}, RMS normalisation and a feed-forward block. It is trained from scratch on the synthetic corpus described in Section~4.4, so the direction and strength of its bias are known by construction and every metric has a checkable answer; it is used to validate the method. \emph{Qwen2.5-0.5B-Instruct}~\cite{qwen2024} is a publicly released, instruction-tuned model that was used unchanged; it tests whether the findings hold in a real model. Qwen2.5 shares the decoder design of the Llama family~\cite{llama3}, so the same adapter supports Llama-3-8B, Mistral-7B and Qwen2.5-7B through configuration files.
+
+\begin{table}[htbp]
+\centering
+\caption{Models under study}\label{tab:models}
+\small
+\begin{tabularx}{\textwidth}{@{}L{4.3cm}YY@{}}
+\toprule
+ & \textbf{Reference transformer} & \textbf{Qwen2.5-0.5B-Instruct} \\
+\midrule
+Role & Method validation with known bias & Real, publicly released model \\
+Layers / query heads / KV heads & 4 / 8 / 2 & 24 / 14 / 2 \\
+Head dimension / model width & 16 / 128 & 64 / 896 \\
+Position encoding & RoPE, $\theta = 10^4$ & RoPE, $\theta = 10^6$ \\
+Vocabulary & 50 closed-vocabulary tokens & Qwen tokenizer (subword) \\
+Weights & Trained here, 1,200 steps, batch 16, then frozen & Pre-trained, frozen \\
+Hardware and precision & CPU, 32-bit & GTX 1650 Ti GPU, 32-bit \\
+Numbers stored per token in the cache & $2 \times 4 \times 2 \times 16 = 256$ & $2 \times 24 \times 2 \times 64 = 6{,}144$ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Instrumentation and provenance}
+For a conversation of $T$ tokens on a model with $L$ layers and $H$ KV heads, the runtime memory after step $T$ is $M_T = \{(k_{\ell,h,t}, v_{\ell,h,t})\}$. Every entry is stored with the provenance record
+\begin{equation}
+p_{\ell,h,t} = (\ell, h, t, \tau(t), a(t), c(t)),
+\end{equation}
+where $\tau(t)$ is the turn in which position $t$ was written, $a(t)$ the agent that wrote it and $c(t)$ its channel: \emph{system} (the opening prompt), \emph{probe} (text the agent was given to read), \emph{agent} (text it generated) or \emph{peer} (entries transplanted from the other agent). The cache sets a write context before each segment is processed, and every new position inherits that context. During generation, the attention tap receives the attention distribution $\alpha^{\ell,h}_{q,\cdot}$ of every query $q$ and accumulates the head-averaged attention $\bar\alpha_{q,t} = \frac{1}{L H_q}\sum_{\ell,h}\alpha^{\ell,h}_{q,t}$, the attention mass received by each position per head, and how often each position appears in the top-$k$ of each head. For the Hugging Face path, attention matrices are moved from the GPU to the CPU in a single transfer per forward pass, which kept the GPU run within 4~GB.
+
+At the end of a conversation the receiver's statistics, provenance and value vectors are written to the trace store: one row per conversation and per turn in SQLite, and one row per (layer, head, position) in a Parquet fact table. Raw keys and values are kept for a stratified sample: within every memory arm, $\mathrm{round}(0.05 \times 45) = 2$ cells are taken at evenly spaced points of the pressure-by-seed grid, giving six of the 135 conversations per experiment.
+
+\subsection{Two-agent conversation protocol}
+Figure~\ref{fig:protocol} shows one conversation. Both agents are instances of the same frozen model, each with its own cache. Both caches are first seeded with the same opening prompt and an introduction sentence naming the two groups of the probe (for example ``Vorlan and Tessic met there.''), so that seeding is identical in all arms and cancels in the comparisons. The conversation then runs for four rounds. In each round the sender reads four context statements about the stereotyped group, of which a fraction~$\pi$ over the whole conversation are stereotype-consistent (for example ``the Vorlan person is hostile.'') and the rest counter-stereotypical (``the Vorlan person is friendly.''), in a random order fixed by the seed. The sender then generates a reply of at most ten tokens by greedy decoding. Information crosses to the receiver according to the memory arm, after which the receiver generates its own reply. With 16 statements in total, the nine pressure levels $\pi \in \{0, 0.125, \dots, 1\}$ correspond to $0, 2, 4, \dots, 16$ stereotype-consistent statements.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners=2pt, align=center, font=\small, inner sep=5pt},
+  agent/.style={box, fill=#1, text width=3.0cm, minimum height=2.3cm},
+  lab/.style={font=\footnotesize, align=center, text width=6.0cm, fill=white, inner sep=1pt},
+  arr/.style={-{Stealth[length=2.2mm]}, thick}
+]
+\node[agent=violet!12] (snd) {\textbf{Sender agent}\\reads the statements and writes a reply\\[3pt]\footnotesize own KV cache};
+\node[agent=blue!10, right=6.6cm of snd] (rcv) {\textbf{Receiver agent}\\never sees the statements; writes a reply\\[3pt]\footnotesize own KV cache};
+\node[box, text width=4.4cm, fill=gray!8, above=0.8cm of snd] (stm) {16 context statements, a fraction $\pi$ one-sided (4 per round)};
+\draw[arr] (stm) -- (snd);
+\draw[arr, blue!70!black] ($(snd.east)+(0,0.75)$) -- ($(rcv.west)+(0,0.75)$) node[lab, midway, above=1pt, text=black] {\textbf{Shared KV}: the sender's turn segment is grafted, RoPE re-indexed (``peer'' channel)};
+\draw[arr, orange!80!black] ($(snd.east)+(0,-0.2)$) -- ($(rcv.west)+(0,-0.2)$) node[lab, midway, above=1pt, text=black] {\textbf{Text only}: the reply tokens are appended};
+\draw[arr, gray, dashed] ($(snd.east)+(0,-0.9)$) -- ($(rcv.west)+(0,-0.9)$) node[lab, midway, above=1pt, text=black] {\textbf{Isolated}: nothing crosses};
+\node[box, text width=9.5cm, fill=gray!8] (probe) at ($(snd.south)!0.5!(rcv.south) + (0,-1.35)$) {After every turn both agents are scored on the probe ``the Vorlan person is \_\_\_'':\quad $\Delta = s(\textit{hostile}) - s(\textit{friendly})$, \; $B = \tanh(\Delta/2)$};
+\draw[arr] (snd.south) -- (snd.south |- probe.north);
+\draw[arr] (rcv.south) -- (rcv.south |- probe.north);
+\end{tikzpicture}
+\caption{One round of the two-agent protocol in the three memory arms. Each conversation has four rounds (eight turns); the receiver is scored after each of its turns and its final score is the outcome of the conversation.}\label{fig:protocol}
+\end{figure}
+
+In the \textbf{shared-KV arm}, the sender's complete cache segment for the turn, covering the statements it read and the reply it wrote, is transplanted into the receiver's cache. Cached keys already contain the rotary rotation of the position at which they were written, so they are re-indexed to the receiver's next free positions. Because rotary embeddings compose additively in the rotation angle~\cite{su2024roformer}, a key written at position $p_{\mathrm{old}}$ is moved to $p_{\mathrm{new}}$ by
+\begin{equation}
+k_{\mathrm{new}} = R_{\Theta}\!\left(p_{\mathrm{new}} - p_{\mathrm{old}}\right) k_{\mathrm{old}},
+\end{equation}
+where $R_\Theta(\cdot)$ is the block-diagonal rotation of the rotary embedding with frequencies $\Theta$; values are copied unchanged. In the \textbf{text-only arm}, only the tokens of the sender's reply are appended to the receiver's cache, as if the receiver had read them. In the \textbf{isolated arm}, nothing crosses, which gives the bias of the receiver when nobody talks to it. The same seed produces the same statements in every arm, so the arms differ only in the channel between the agents.
+
+\subsection{Bias index and factual probes}
+After every turn, each agent's cache is cloned and the scoring prompt ``the [group] person is'' is evaluated on the clone, so that measurement leaves no trace in the conversation. With $s(\cdot)$ the logit of a single-token answer, or the summed log-probability of a multi-token answer under the Hugging Face tokenizer, the bias index is
+\begin{equation}
+\Delta = s(\text{stereotype trait}) - s(\text{counter-stereotype trait}), \qquad B = \tanh(\Delta/2) \in [-1, 1].
+\end{equation}
+Since $\tanh(\Delta/2) = 2\sigma(\Delta) - 1$, the quantity $(1 + B)/2 = \sigma(\Delta)$ is exactly the probability that the model picks the stereotype trait when forced to choose between the two traits. The demonstration website reports this probability as ``times out of 100'', so that $B = 0.742$ appears as 87 times out of 100. After every receiver turn the factual probe of the conversation, for example ``what is the capital of France? the answer is'', is also scored; a turn is flagged as a hallucination when the highest-scoring of the four candidate answers is wrong. Factual accuracy and the perplexity of the receiver's own replies form the coherence measures used by the acceptance rule.
+
+\subsection{Memory metrics and attractors}
+Four metrics describe how long and how strongly a cache position $t$ keeps influencing generation. The \emph{reuse score} normalises the attention a position receives so that a position attended exactly as much as under uniform attention scores one:
+\begin{equation}
+R(t) = \frac{1}{T - t}\sum_{q=t+1}^{T} q\,\bar\alpha_{q,t}.
+\end{equation}
+The \emph{lifetime} is the last horizon at which smoothed attention still exceeds the uniform level $\kappa / q$:
+\begin{equation}
+L(t) = \max\left\{ q - t \;\middle|\; \tilde\alpha_q(t) > \frac{\kappa}{q} \right\}, \qquad \tilde\alpha_q(t) = \frac{1}{w}\sum_{j=q-w+1}^{q}\bar\alpha_{j,t}.
+\end{equation}
+The \emph{persistence} is the fraction of later (query, layer, head) triples for which $t$ is in the top-$k$ of the attention distribution:
+\begin{equation}
+P(t) = \frac{1}{(T - t) L H_q}\sum_{q>t}\sum_{\ell,h}\mathbb{1}\!\left[t \in \mathrm{TopK}_k\!\left(\alpha^{\ell,h}_{q,\cdot}\right)\right].
+\end{equation}
+The \emph{centrality} is the PageRank~\cite{page1999pagerank} of $t$ in the directed attention graph whose edges carry the weights $\bar\alpha_{q,t}$:
+\begin{equation}
+c(t) = \frac{1 - d}{T} + d\sum_{q}\frac{\bar\alpha_{q,t}}{\sum_{t'}\bar\alpha_{q,t'}}\,c(q).
+\end{equation}
+A position is a \emph{memory attractor} when three conditions hold together,
+\begin{equation}
+\mathcal{A} = \left\{ t \;\middle|\; z_R(t) > z^\star \;\wedge\; L(t) > \lambda T \;\wedge\; P(t) > p^\star \right\},
+\end{equation}
+where $z_R$ is the within-conversation $z$-score of $R$. Positions $t \le 4$ form a separate \emph{sink} class, because they are the attention-sink phenomenon already described by Xiao et al.~\cite{xiao2024sinks}; only attractors outside that class, called \emph{novel} attractors, count as a finding. Centrality is reported but not used in the rule. The thresholds were fixed before the main runs and are listed in Table~\ref{tab:thresholds}.
+
+\begin{table}[htbp]
+\centering
+\caption{Pre-registered thresholds and analysis settings}\label{tab:thresholds}
+\small
+\begin{tabularx}{\textwidth}{@{}L{6.4cm}L{2.2cm}Y@{}}
+\toprule
+\textbf{Setting} & \textbf{Value} & \textbf{Used in} \\
+\midrule
+Reuse $z$-score threshold $z^\star$ & 1.0 & Attractor rule \\
+Lifetime fraction $\lambda$ & 0.30 & Attractor rule \\
+Persistence threshold $p^\star$ and top-$k$ & 0.10, $k = 8$ & Attractor rule \\
+Smoothing window $w$ and level $\kappa$ & 8, 1.0 & Lifetime \\
+PageRank damping $d$ & 0.85 & Centrality \\
+Sink positions held out & $t \le 4$ & Attractor classes \\
+Probe folds, permutations, FDR level & 5, 40, 0.05 & Reservoirs \\
+Number of reservoir heads $m$ & 4 & Reservoirs, interventions \\
+Bootstrap resamples (contagion / phase / interventions) & 5,000 / 400 / 2,000 & Confidence intervals \\
+Perturbation strength $\epsilon$; gate factor $g$ & 1.0; 0.10 & Interventions \\
+Coherence budget & $\Delta$PPL $\le 5\%$, $\Delta$Acc $\ge -2$ points & Acceptance rule \\
+Significance level & 0.05 & All tests \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Bias reservoirs}
+For every conversation $n$ and every (layer, KV head) pair, the value vectors at the receiver's attractor positions are averaged into $u^n_{\ell,h} = \frac{1}{|\mathcal{A}_n|}\sum_{t\in\mathcal{A}_n} v_{\ell,h,t}$. Each conversation is labelled by the sign of its final receiver bias; if fewer than 20\% of conversations fall in the minority class, the labels fall back to a median split so that a probe can be fitted. An L2-regularised logistic probe $\sigma(w_{\ell,h}^\top u + b)$ is trained per head with five-fold cross-validation, and its held-out AUC is compared with the AUCs obtained after 40 random permutations of the labels to give a $p$-value. The $p$-values of all heads are corrected with the Benjamini--Hochberg procedure~\cite{benjamini1995fdr}. Because predictive evidence alone does not show that a head matters, the ablation effect of each head is measured by replaying three high-pressure shared-KV conversations with that head's attractor entries ablated, and the reservoir score is
+\begin{equation}
+S(\ell, h) = \mathrm{AUC}_{\ell,h} \cdot \max\!\left(0, \frac{B - B_{\mathrm{abl}(\ell,h)}}{B}\right).
+\end{equation}
+The bias reservoirs are the top $m = 4$ heads by $S$ among those that survive the false-discovery control; the probe weight vectors $w_{\ell,h}$ define the bias directions used by the perturbation intervention.
+
+\subsection{Memory contagion and phase transitions}
+With $B^{(S)}$, $B^{(T)}$ and $B^{(C)}$ the mean final receiver bias in the shared-KV, text-only and isolated arms, the bias transferred to the receiver is decomposed into a memory-mediated and a text-mediated part:
+\begin{equation}
+\mathrm{MC} = B^{(S)} - B^{(T)}, \qquad \mathrm{TC} = B^{(T)} - B^{(C)}, \qquad \mathrm{MC} + \mathrm{TC} = B^{(S)} - B^{(C)}.
+\end{equation}
+Memory contagion is therefore defined as the residual that the exchanged text cannot explain. Its uncertainty is estimated by a 5,000-sample percentile bootstrap confidence interval for the difference in means~\cite{efron1993bootstrap}, overall and at every pressure level, and by a two-sided Mann--Whitney $U$ test~\cite{mann1947test} between the shared-KV and text-only outcomes. The rank-based test is less sensitive than the difference in means to a few large values, so the two can disagree when the outcome distributions are skewed. Directed dependence between the agents is examined with transfer entropy~\cite{schreiber2000te} between the per-turn bias series of sender and receiver, using a binary quantile discretisation and lag one, and with the Jaccard overlap between the sender's and receiver's attractor sets.
+
+A memory phase transition would mean that bias stays low and then rises abruptly at a critical pressure. The mean bias at each pressure level is fitted with
+\begin{equation}
+B(\pi) = B_0 + \frac{B_1 - B_0}{1 + e^{-\kappa(\pi - \pi_c)}}
+\end{equation}
+and with a straight line. Following the design document, and mindful that apparent emergent jumps can be an artefact of the chosen measurement~\cite{schaeffer2023mirage}, a transition is claimed only if all six criteria hold: the logistic model beats the linear one by AIC~\cite{akaike1974aic} and by BIC~\cite{schwarz1978bic}; the bootstrap interval of the steepness $\kappa$ excludes the near-linear regime; an independent exact change-point detector places its break inside the interval of $\pi_c$; at least three seeds support the transition individually; and the transition replicates in a second model.
+
+\subsection{Causal interventions and acceptance rule}
+Three cache-only interventions act on a target set $\mathcal{S}$ of (layer, KV head, position) entries. \emph{Ablation} sets the pre-softmax attention score of every target entry to $-\infty$ for all query heads that read the targeted KV head, so the entries receive zero attention. \emph{Perturbation} removes the probe-identified bias direction $\hat w$ from the target value vectors at read time, $v \leftarrow v - \epsilon(\hat w^\top v)\hat w$, without changing the stored cache. \emph{Gating} multiplies the attention to the targets by $g = 0.1$ and renormalises, which is equivalent to adding $\log g$ to their pre-softmax scores. On the Hugging Face path the edits are applied through a forward pre-hook that injects an additive mask into each attention module, and perturbation edits are undone after each forward pass.
+
+The target set combines the reservoir heads with a set of positions. Following the workflow of the design document, two candidate position sets were tried in order: first the union of the novel attractor positions found in the shared-KV conversations, and then, because no intervention on that set was accepted, the 32 non-sink positions that the reservoir heads themselves attend to most. Each intervention is evaluated on 15 cells, the shared-KV arm at the three highest pressures ($\pi = 0.75, 0.875, 1$) with five seeds. Every cell is replayed under the same seed with and without the edit, so the two runs differ only in the edit, and the average causal effect is
+\begin{equation}
+\mathrm{ACE}(\mathcal{S}) = \mathbb{E}\left[B \mid do(\mathcal{S})\right] - \mathbb{E}[B],
+\end{equation}
+estimated from the paired differences with a 2,000-sample bootstrap. The relative reduction is $-\mathrm{ACE}/|\mathbb{E}[B]|$. Two negative controls are replayed in the same way: a \emph{random-head control} that applies the same edit to an equal number of randomly chosen non-reservoir heads at the same positions, and a \emph{sink-only control} that applies it to the reservoir heads but only at the sink positions.
+
+An intervention is \textbf{accepted} only if all of the following hold: its effect is significantly below zero; it is significantly stronger than the random-head control; it is significantly stronger than the sink-only control (each by a one-sided paired bootstrap at $p < 0.05$); the mean perplexity of the receiver's replies rises by at most 5\%; and factual accuracy drops by at most 2 points. The coherence budget is a rejection criterion rather than a reported metric, so an intervention that lowers bias by damaging the model fails rather than counting as a success, and every rejection is recorded with its reasons.
+
+\subsection{Software realisation}
+The framework is implemented as the Python package \texttt{rcm}, organised by module as shown in Table~\ref{tab:package}. A single command runs the complete pipeline, \texttt{python -m rcm.cli run}, optionally with a configuration file such as \texttt{configs/qwen2.5-0.5b.yaml}. Further commands regenerate the figures and the technical dashboard from saved results, rebuild the data embedded in the demonstration website, and serve the website together with a JSON trace service on the local machine. The trace service implements the read-only interface of the design document, including listing conversations, returning the attractors of a conversation, the reservoir ranking and the contagion results, and a replay endpoint for interventions.
+
+\begin{table}[htbp]
+\centering
+\caption{Organisation of the \texttt{rcm} package}\label{tab:package}
+\small
+\begin{tabularx}{\textwidth}{@{}L{3.5cm}L{1.6cm}Y@{}}
+\toprule
+\textbf{Sub-package} & \textbf{Module} & \textbf{Responsibility} \\
+\midrule
+\texttt{adapters} & M1 & Model adapters: reference transformer and Hugging Face models; tracing caches, attention tap, interventions inside attention \\
+\texttt{module1} & M1 & Provenance cache, conversation orchestrator, bias and factual scoring, trace logger \\
+\texttt{store} & M1 & SQLite and Parquet trace store with checksums \\
+\texttt{module2} & M2 & Attractor metrics and detection; reservoir probes and ranking \\
+\texttt{module3} & M3 & Contagion decomposition, transfer entropy, phase fit, change-point \\
+\texttt{module4} & M4 & Intervention specifications, controls, paired replay, acceptance rule \\
+\texttt{report} & M4 & Figures, technical dashboard, web service, demonstration data \\
+\texttt{probes}, \texttt{testbed}, \texttt{pipeline}, \texttt{cli} & -- & Probe bank and corpus, reference-model training, end-to-end pipeline, command line \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The package contains about 5,400 lines of library code and 670 lines of tests. The 36 automated tests check each metric against analytic values on synthetic attention patterns with a planted attractor; provenance stamping; exact rotary re-indexing and cache transplantation; deterministic replay; that ablation gives zero attention to targets and gating lowers it while leaving other heads unchanged; that perturbation removes only the targeted direction and leaves the stored cache untouched; the contagion identity; the recovery of a planted phase transition and the rejection of linear data; the false-discovery procedure; every branch of the acceptance rule; the Hugging Face path on a randomly initialised Qwen2 model with a stand-in tokenizer; and the consistency of the demonstration data with the saved results.
+
+\subsection{Demonstration website}
+To make the experiment understandable to reviewers and to the public, the results are presented as a guided website, published at \url{https://aibias.pages.dev}. The site is organised in four chapters (the topic, the question, a live demonstration and the results) over 21 screens with forward and backward navigation, and it uses plain language throughout: the sender is ``AI number 1'', the receiver ``AI number 2'', the shared-KV arm is ``handing over the notebook'', the text-only arm ``a phone call'' and the isolated arm ``not connected''. In the demonstration the visitor chooses a fictional group, the number of one-sided statements (0 to 16 in steps of two, matching the nine pressure levels), the memory arm and, optionally, an intervention on the hiding spots, which are the bias reservoirs. The site then plays back the conversation, shows the quiz result as ``times out of 100'' against the same receiver with no contact, and shows the receiver's cache coloured by provenance channel.
+
+Every combination offered by the demonstration was run with the same code as the experiment: the 135 conversations of the reference model (five seeds, nine pressure levels, three arms; the five seeds draw four distinct fictional groups, one of which appears twice with a different statement order) and, for each, its replay with ablation and with gating, 405 runs in all. Their results, together with the headline numbers of both experiments, are embedded in the single HTML file of the site, so the demonstration needs no server and its numbers are identical to those in Chapter~6. An automated test verifies this identity.

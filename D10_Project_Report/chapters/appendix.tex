@@ -1,0 +1,55 @@
+\chapter{Source Code and Reproducibility}
+The complete source code, configuration files, experiment results, tests and demonstration website are kept in the project repository at \url{https://github.com/msraaghavan/Project-Phase}. The results reported in this report correspond to commit \texttt{0f8b193} of the \texttt{main} branch. The repository contains no passwords, access tokens or private data; model weights are not stored in it and are downloaded from Hugging Face when needed.
+
+\section{Setup and execution}
+The software requires Python~3.10 or later. The core dependencies are installed together with the package, and the optional extras add the Hugging Face libraries and the test tools:
+
+\begin{verbatim}
+pip install -e .            # core: reference model, analyses, website
+pip install -e .[hf,test]   # adds Hugging Face models and pytest
+\end{verbatim}
+
+The complete reference experiment, including training the reference model, all 135 conversations, all analyses, the figures and the technical dashboard, is run with a single command and takes about 12 minutes on a laptop CPU:
+
+\begin{verbatim}
+python run_all.py
+\end{verbatim}
+
+The real-model experiment is selected by a configuration file. On GPUs without native bfloat16 support, such as the GTX 1650~Ti, the precision is set to 32 bits through an environment variable:
+
+\begin{verbatim}
+export RCM_DTYPE=float32
+python -m rcm.cli run --config configs/qwen2.5-0.5b.yaml
+\end{verbatim}
+
+The configuration files \nolinkurl{llama3-8b.yaml}, \nolinkurl{mistral-7b.yaml} and \nolinkurl{qwen2.5-7b.yaml} in the \nolinkurl{configs} folder run the same pipeline on the larger models when a suitable GPU is available. Further commands regenerate figures and the dashboard from saved results, rebuild the data embedded in the website, and start the website with the local trace service:
+
+\begin{verbatim}
+python -m rcm.cli report --results results
+python -m rcm.cli site
+python -m rcm.cli serve        # then open http://127.0.0.1:8000
+\end{verbatim}
+
+The demonstration website is also available publicly at \url{https://aibias.pages.dev}, and the file \nolinkurl{rcm/report/static/index.html} can be opened directly in a browser without any server. Every run writes a manifest containing its full configuration, the SHA-256 hash of that configuration, the source-control commit and the seeds, and a checksum file for the trace store, so that any reported number can be traced to the exact code and settings that produced it.
+
+\section{Supporting material}
+The automated test suite is run with \texttt{python -m pytest}. Table~\ref{tab:tests} lists the 36 tests by file and what they verify; all pass in under a minute. To check that the tests are able to detect errors, each of the improved tests was also run against deliberately broken versions of the code (halving the perturbation, disabling the gate, removing the accuracy check from the acceptance rule and breaking an element reference in the website), and each failed as expected before the code was restored.
+
+\begin{table}[htbp]
+\centering
+\caption{Automated test suite}\label{tab:tests}
+\small
+\begin{tabularx}{\textwidth}{@{}L{5.0cm}L{1.0cm}Y@{}}
+\toprule
+\textbf{Test file} & \textbf{Tests} & \textbf{What is verified} \\
+\midrule
+\texttt{test\_metrics.py} & 6 & Reuse, lifetime and persistence on synthetic attention with known structure; PageRank against NetworkX; the joint attractor rule finds only the planted attractor \\
+\texttt{test\_cache\_and\_adapter.py} & 7 & Provenance stamping; exact RoPE re-indexing; grafted keys equal native keys; deterministic replay; ablation and gating behaviour; read-time perturbation; Hugging Face adapter on a random Llama model \\
+\texttt{test\_analysis.py} & 8 & Contagion identity; transfer entropy detects coupling; planted phase transition recovered and linear data rejected; exact change-point; Benjamini--Hochberg; every branch of the acceptance rule \\
+\texttt{test\_hf\_path.py} & 9 & Hugging Face path on a random Qwen2 model: RoPE parameters, cached scoring without side effects, multi-token scoring, cache grafting, read-time perturbation, all three arms, no special tokens generated, stratified raw-KV sampling \\
+\texttt{test\_web.py} & 6 & Pages and figures served; summary matches results; the live demo replays the sweep exactly; bad input rejected; embedded website data matches the results and covers every option; page script consistent and free of emoji \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The results of both experiments are stored in the directories \nolinkurl{results/} (reference transformer) and \nolinkurl{results_qwen2.5-0.5b/}. Each contains \texttt{results.json} with every number reported in Chapter~6, the six figures used in this report, a self-contained technical dashboard, the run log and the trace store, in which \nolinkurl{traces/index.sqlite} indexes conversations, turns and interventions, \nolinkurl{traces/parquet/} holds the per-position statistics, and \nolinkurl{traces/raw_kv/} holds the sampled raw key and value tensors.

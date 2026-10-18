@@ -1,0 +1,265 @@
+\documentclass[12pt,a4paper,oneside]{report}
+\usepackage[T1]{fontenc}
+\usepackage{mathptmx}
+\usepackage[left=30mm,right=25mm,top=25mm,bottom=25mm]{geometry}
+
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\setlength{\headheight}{30pt}
+\setlength{\headsep}{12pt}
+
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,tabularx,multirow}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc,backgrounds}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage{microtype}
+\usepackage{graphicx,array,longtable,pdflscape,setspace}
+\usepackage[hidelinks]{hyperref}
+\onehalfspacing
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\setcounter{tocdepth}{1}
+\renewcommand{\contentsname}{Table of Contents}
+\newcommand{\institutionlogo}[1]{\IfFileExists{amrita-logo.png}{\includegraphics[width=#1]{amrita-logo.png}}{\fbox{\parbox{#1}{\centering Amrita Vishwa Vidyapeetham\\Place amrita-logo.png beside this file}}}}
+\graphicspath{{figures/}}
+
+\newcommand{\ProjectTitle}{Runtime Computational Memory: Understanding Emergent Behaviour through KV-Cache Dynamics in Transformer Language Models}
+\newcommand{\GuideName}{Dr. Thara Shyam}
+\newcommand{\GuideLine}{Department of Computer Science and Engineering}
+\newcommand{\CoordinatorName}{Dr. Divya Udayan J}
+% Fill in before printing; a blank signature line is printed until then.
+\newcommand{\ChairpersonName}{\rule{0.36\textwidth}{0.4pt}}
+\newcommand{\ReportDate}{October 2026}
+\newcommand{\StudentA}{S Kunal Achintya Reddy}\newcommand{\RegA}{AM.SC.U4CSE23352}
+\newcommand{\StudentB}{V Sriman Vashishta}\newcommand{\RegB}{AM.SC.U4CSE23368}
+\newcommand{\StudentC}{Raaghavan M S}\newcommand{\RegC}{AM.SC.U4CSE23330}
+\newcommand{\StudentD}{B Nithilesh}\newcommand{\RegD}{AM.SC.U4CSE23311}
+
+\fancypagestyle{project}{%
+  \fancyhf{}
+  \fancyhead[C]{\parbox{\textwidth}{\centering\small\nouppercase{\ProjectTitle}}}
+  \fancyfoot[C]{\thepage}
+  \renewcommand{\headrulewidth}{0.4pt}
+}
+% Preliminary pages show only a page number.
+\fancypagestyle{plain}{%
+  \fancyhf{}
+  \fancyfoot[C]{\thepage}
+  \renewcommand{\headrulewidth}{0pt}
+}
+\newcommand{\EnableProjectHeaders}{%
+  \pagestyle{project}%
+  % report uses plain style on chapter-opening pages.
+  \fancypagestyle{plain}{%
+    \fancyhf{}
+    \fancyhead[C]{\parbox{\textwidth}{\centering\small\nouppercase{\ProjectTitle}}}
+    \fancyfoot[C]{\thepage}
+    \renewcommand{\headrulewidth}{0.4pt}
+  }%
+}
+\titlespacing*{\chapter}{0pt}{0pt}{16pt}
+\titlespacing*{\section}{0pt}{10pt}{4pt}
+\titlespacing*{\subsection}{0pt}{8pt}{3pt}
+\titlespacing*{\subsubsection}{0pt}{6pt}{3pt}
+\raggedbottom
+
+% table helpers
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\renewcommand{\arraystretch}{1.2}
+
+\begin{document}
+\pagestyle{empty}
+
+{\centering \Large\bfseries \ProjectTitle{}\par}
+\vspace{10pt}
+{\centering Project report submitted in partial fulfilment of the requirements for the award of the degree of\par}
+\vspace{6pt}
+{\centering \textbf{BACHELOR OF TECHNOLOGY}\par}
+{\centering in\par}
+{\centering \textbf{COMPUTER SCIENCE AND ENGINEERING}\par}
+\vspace{8pt}
+{\centering Submitted by\par}
+\vspace{4pt}
+{\centering \fontsize{14}{18}\selectfont
+\StudentA{} \quad \RegA\par}
+
+{\centering \fontsize{14}{18}\selectfont
+\StudentB{} \quad \RegB\par}
+
+{\centering \fontsize{14}{18}\selectfont
+\StudentC{} \quad \RegC\par}
+
+{\centering \fontsize{14}{18}\selectfont
+\StudentD{} \quad \RegD\par}
+\vspace{8pt}
+{\centering \fontsize{14}{18}\selectfont
+Under the guidance of\par
+\GuideName\par
+\GuideLine\par}
+\vspace{8pt}
+{\centering \institutionlogo{4.5in}\par}
+\vspace{4pt}
+{\centering \textbf{AMRITA SCHOOL OF COMPUTING}\par}
+{\centering \textbf{AMRITA VISHWA VIDYAPEETHAM}\par}
+{\centering \textbf{AMRITAPURI CAMPUS}\par}
+{\centering \textbf{KOLLAM 690525}\par}
+{\centering \textbf{OCTOBER 2026}\par}
+
+
+\clearpage
+{\centering \institutionlogo{3.7in}\par}
+\vspace{6pt}
+{\centering \textbf{DEPARTMENT OF COMPUTER SCIENCE AND ENGINEERING}\par}
+{\centering Amrita School of Computing, Amritapuri Campus\par}
+\vspace{10pt}
+{\centering \Large\bfseries BONAFIDE CERTIFICATE\par}
+\vspace{10pt}
+\begin{sloppypar}
+This is to certify that the project report entitled ``\ProjectTitle{}'', submitted by \StudentA{} (\RegA), \StudentB{} (\RegB), \StudentC{} (\RegC) and \StudentD{} (\RegD), in partial fulfilment of the requirements for the award of the degree of Bachelor of Technology in Computer Science and Engineering at Amrita Vishwa Vidyapeetham, is a bonafide record of the work carried out by them under my guidance and supervision at Amrita School of Computing, Amritapuri, during Semester 7 of the academic year 2026--2027.
+\end{sloppypar}
+
+\vspace{24pt}
+\begin{tabular}{p{.46\textwidth}p{.46\textwidth}} \GuideName & \CoordinatorName \\ Project Guide & Project Coordinator \\[18pt] Signature \hrulefill & Signature \hrulefill \\[30pt] \ChairpersonName &  \\ Chairperson, CSE & Reviewers \\[18pt] Signature \hrulefill & Signature \hrulefill \end{tabular}
+
+\vspace{24pt}
+Place: Amritapuri\\
+Date: \ReportDate
+\clearpage
+\thispagestyle{empty}
+
+{\centering
+\institutionlogo{3.0in}\par
+\vspace{0.2cm}
+\textbf{DEPARTMENT OF COMPUTER SCIENCE AND ENGINEERING}\par
+Amrita School of Computing, Amritapuri Campus\par
+\vspace{0.4cm}
+{\Large\bfseries DECLARATION\par}
+}
+
+\vspace{0.3cm}
+
+\begin{sloppypar}\setlength{\rightskip}{0pt plus 2em}\noindent
+We, \StudentA{} (\RegA), \StudentB{} (\RegB), \StudentC{} (\RegC) and \StudentD{} (\RegD),
+hereby declare that the project entitled
+``\ProjectTitle{}'' is a record of our original work
+carried out under the guidance of \GuideName, \GuideLine,
+Amrita Vishwa Vidyapeetham, Amritapuri.
+To the best of our knowledge, this work has not formed the
+basis for the award of any degree, diploma, fellowship or
+similar qualification to any candidate at any university.
+All sources and contributions of others have been
+appropriately acknowledged.
+\end{sloppypar}
+
+\vspace{0.5cm}
+
+\noindent
+Place: Amritapuri\\
+Date: \ReportDate
+
+\vspace{0.7cm}
+
+\noindent
+\begin{tabular}{@{}p{0.60\textwidth}p{0.34\textwidth}@{}}
+\textbf{Student details} & \textbf{Signature of the student} \\[8pt]
+\StudentA\newline \RegA & \rule{0.30\textwidth}{0.4pt} \\[10pt]
+\StudentB\newline \RegB & \rule{0.30\textwidth}{0.4pt} \\[10pt]
+\StudentC\newline \RegC & \rule{0.30\textwidth}{0.4pt} \\[10pt]
+\StudentD\newline \RegD & \rule{0.30\textwidth}{0.4pt}
+\end{tabular}
+
+\vspace{0.5cm}
+
+\noindent
+\textbf{Project Guide:} \GuideName
+
+\vspace{0.5cm}
+
+\noindent
+\textbf{Signature of the Project Guide:}
+\rule{4cm}{0.4pt}
+
+\clearpage
+\pagenumbering{roman}
+\pagestyle{plain}
+
+\phantomsection
+\addcontentsline{toc}{chapter}{Acknowledgement}
+{\centering \Large\bfseries ACKNOWLEDGEMENT\par}
+\vspace{10pt}
+We express our sincere gratitude to our project guide, \GuideName, Department of Computer Science and Engineering, for her continuous guidance throughout this project. Her insistence that every claim be backed by a measurable test, and that a negative result be reported as carefully as a positive one, shaped both the experimental design and the way the findings in this report are presented. Her regular reviews of our design documents, intermediate results and drafts helped us keep the scope realistic for the hardware available to us.
+
+We thank our Project Coordinator, \CoordinatorName, for organising the review schedule and for the feedback received during the design and mid-term reviews, which led directly to clearer objectives and a stricter evaluation plan. We are grateful to the Chairperson and the faculty of the Department of Computer Science and Engineering, and to the reviewers of our earlier submissions, whose questions about attention sinks, negative controls and the relevance of the work to society improved this report.
+
+We thank Amrita School of Computing, Amritapuri, and Amrita Vishwa Vidyapeetham for providing the academic environment and resources that made this work possible. We also acknowledge the open-source community behind PyTorch, Hugging Face Transformers and the Qwen model family, whose publicly available tools and model weights allowed us to study a real language model on a student laptop. Finally, we thank our families and friends for their patience and encouragement during this semester.
+
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{Abstract}
+{\centering \Large\bfseries ABSTRACT\par}
+\vspace{10pt}
+Large language models increasingly support hiring, education, healthcare and public services, and they are beginning to work in teams in which one model passes information to another. Social bias in such systems falls mostly on groups that are already disadvantaged, which is the concern of Sustainable Development Goal~10, \emph{Reduced Inequalities}; the project also supports SDG~9, \emph{Industry, Innovation and Infrastructure}, and SDG~16, \emph{Peace, Justice and Strong Institutions}, through open and auditable AI tools. Bias mitigation today mostly requires retraining, while the key--value (KV) cache, the runtime memory a transformer builds during a conversation, is studied only as an efficiency problem. This project treats the KV cache as an object that can be measured and edited. We built an open Python framework that stamps every cache entry with its layer, head, position, turn, agent and source; detects persistent memory attractors; localises bias reservoirs with cross-validated probes; separates bias carried by shared memory from bias carried by text between two agents; and tests cache-only interventions by seed-matched replay against negative controls and a coherence budget. It was evaluated on 135 two-agent conversations with a controlled reference transformer and 135 with the public Qwen2.5-0.5B-Instruct model on a 4~GB laptop GPU, using fictional social groups. In the reference model, shared cache entries left the receiving agent more biased than exchanged text (memory contagion $+0.186$, 95\% interval $+0.034$ to $+0.340$, Mann--Whitney $p = 0.085$), and middle-layer heads predicted bias with AUC up to 0.92; ablating their entries removed 20.3\% of the bias but cost 6.7 points of factual accuracy, so the pre-registered rule rejected it. In Qwen2.5 the bias spread equally through text and memory, and no attractors beyond attention sinks appeared. A public website presents the experiment to non-specialists.
+
+\vspace{6pt}
+\textbf{Keywords:} KV cache; large language models; social bias; multi-agent systems; mechanistic interpretability; causal intervention
+
+\clearpage
+\tableofcontents
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{List of Figures}
+\listoffigures
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{List of Tables}
+\listoftables
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{List of Abbreviations}
+{\centering \Large\bfseries LIST OF ABBREVIATIONS\par}
+\vspace{10pt}
+\begin{tabular}{@{}L{0.18\textwidth}L{0.74\textwidth}@{}}
+ACE & Average Causal Effect \\
+AIC / BIC & Akaike / Bayesian Information Criterion \\
+API & Application Programming Interface \\
+AUC & Area Under the Receiver Operating Characteristic Curve \\
+BBQ & Bias Benchmark for Question Answering \\
+BH-FDR & Benjamini--Hochberg False Discovery Rate \\
+CI & Confidence Interval \\
+CPU / GPU & Central / Graphics Processing Unit \\
+FR / NFR & Functional / Non-Functional Requirement \\
+GQA & Grouped-Query Attention \\
+KV & Key--Value \\
+LLM & Large Language Model \\
+MC / TC & Memory Contagion / Text Contagion \\
+PPL & Perplexity \\
+RoPE & Rotary Position Embedding \\
+SDG & Sustainable Development Goal \\
+TE & Transfer Entropy \\
+\end{tabular}
+
+\clearpage
+\pagenumbering{arabic}
+\pagestyle{plain}
+\EnableProjectHeaders
+
+\input{chapters/ch1_introduction}
+\input{chapters/ch2_problem}
+\input{chapters/ch3_literature}
+\input{chapters/ch4_requirements}
+\input{chapters/ch5_methodology}
+\input{chapters/ch6_results}
+\input{chapters/ch7_conclusion}
+
+\clearpage
+\renewcommand{\bibname}{References}
+\input{chapters/references}
+
+\clearpage
+\appendix
+\input{chapters/appendix}
+
+\end{document}

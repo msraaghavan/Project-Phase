@@ -11,3 +11,12 @@ venv/
 
 # Local scratch
 scratch_*
+
+# LaTeX build files
+D10_Project_Report/*.aux
+D10_Project_Report/*.log
+D10_Project_Report/*.lof
+D10_Project_Report/*.lot
+D10_Project_Report/*.out
+D10_Project_Report/*.toc
+D10_Project_Report/main.pdf

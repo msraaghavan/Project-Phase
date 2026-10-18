@@ -760,7 +760,11 @@ const base = () => D.baseline[topic().seed];
 function bindControls(root) {
   const t = topic(), k = S.n, n = D.statements;
   $$('[data-ctl="topic"]', root).forEach((el) => {
-    el.innerHTML = D.topics.map((x, i) => `<button class="chip ${i === S.topic ? "on" : ""}" data-i="${i}">${esc(x.group)}s</button>`).join("");
+    const seen = {};
+    el.innerHTML = D.topics.map((x, i) => {
+      const r = seen[x.group] = (seen[x.group] || 0) + 1;
+      return `<button class="chip ${i === S.topic ? "on" : ""}" data-i="${i}">${esc(x.group)}s${r > 1 ? ` (try ${r})` : ""}</button>`;
+    }).join("");
     $$(".chip", el).forEach((b) => b.onclick = () => { S.topic = +b.dataset.i; refresh(); });
   });
   $$('[data-ctl="n"]', root).forEach((el) => { el.value = k; el.oninput = () => { S.n = +el.value; refresh(); }; });
@@ -817,7 +821,7 @@ function quizParts(fix) {
   let story = `<p>AI number 1 read ${n} sentences: <b>${k}</b> said "${esc(t.unfair)}" and <b>${n - k}</b> said "${esc(t.fair)}". ${how.replace(/^It /, "AI number 2 ").replace("into its memory", "into AI number 2's memory")}</p>`;
   if (S.arm === "isolated") story += `<p>On its own it picks "${esc(t.unfair)}" <b>${b0} times out of 100</b>. It already leans that way because we trained this small AI on text where the rumour appears often, on purpose. That's why we always compare with this number.</p>`;
   else story += `<p>After the chat it picks "${esc(t.unfair)}" <b>${a} times out of 100</b>. On its own it would pick it ${b0} times, so the chat ${a === b0 ? "changed almost nothing." : `made it pick "${esc(t.unfair)}" <b>${Math.abs(a - b0)} ${a > b0 ? "more" : "fewer"} times</b> out of 100.`}</p>`;
-  const quiz = `"The ${esc(t.group)} person is <span class="blank">___</span>"<div class="small muted" style="font-weight:400;margin-top:6px">Does AI number 2 pick <b style="color:var(--unfair)">${esc(t.unfair)}</b> or <b style="color:var(--fair)">${esc(t.fair)}</b>?</div>`;
+  const quiz = `"The ${esc(t.group)} person is <span class="blank">&nbsp;</span>"<div class="small muted" style="font-weight:400;margin-top:6px">Does AI number 2 pick <b style="color:var(--unfair)">${esc(t.unfair)}</b> or <b style="color:var(--fair)">${esc(t.fair)}</b>?</div>`;
   return { head, cls, bars, story, quiz, edited, a };
 }
 function fillQuiz(root, fix) {
@@ -968,7 +972,7 @@ function results(which) {
         (c.mcPValue > 0.05 ? `<p class="muted">But a stricter test still gives about a <b style="color:var(--ink)">1 in ${F.oneIn}</b> chance that it's luck. Like 6 heads in 10 coin flips, it's a strong hint, not proof. So we say <b style="color:var(--ink)">likely, but not certain</b>.</p>` : "");
     } else if (c.mcCiHigh < 0) { tag = verdict("no", "No, words spread more"); txt = `<p>${avg}</p>`; }
     else { tag = verdict("mid", "About the same"); txt = `<p>${avg}</p><p>The notebook and the phone call were about the same; the small difference could just be chance. In this AI, the words alone already carried the rumour.</p>`; }
-    $("#r-notebook-text").innerHTML = tag + txt + tech(`Memory contagion MC = B(shared) &minus; B(text) = ${sgn(c.memoryContagion)} (95% bootstrap CI ${sgn(c.mcCiLow)} to ${sgn(c.mcCiHigh)}, permutation p = ${c.mcPValue.toFixed(3)}); text contagion TC = ${sgn(c.textContagion)}.`);
+    $("#r-notebook-text").innerHTML = tag + txt + tech(`Memory contagion MC = B(shared) &minus; B(text) = ${sgn(c.memoryContagion)} (95% bootstrap CI ${sgn(c.mcCiLow)} to ${sgn(c.mcCiHigh)}, two-sided Mann&ndash;Whitney p = ${c.mcPValue.toFixed(3)}); text contagion TC = ${sgn(c.textContagion)}.`);
     chart("r-notebook-chart", barChart({ labels: ["Shared\nmemory", "Words\nonly", "Not\nconnected"], values: [c.biasShared, c.biasText, c.biasControl].map((v) => 100 * P(v)),
       colors: A.map((a) => ARMS[a][1]), hi: 100, fmt: (v) => Math.round(v) + "%", yTitle: "picks the unfair word (average)", ref: { v: 50, t: "50/50" } }));
   }

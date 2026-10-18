@@ -1,0 +1,43 @@
+\chapter{Problem Definition}
+\section{Problem statement}
+During a conversation a transformer language model accumulates a KV cache that every later token reads before it is generated. The cache therefore acts as a second state of the model, one that changes during the conversation while the weights stay fixed. The problem addressed in this project is that there is currently no way to observe how this runtime memory evolves over a long, multi-agent conversation, no way to attribute an emergent behaviour such as social bias to identifiable structures inside it, and no tested way to change that behaviour by acting on the memory alone.
+
+The research question is stated as follows. \emph{When one language-model agent is exposed to one-sided information about a group of people and then interacts with a second agent, does the bias reach the second agent; does sharing cache entries carry more of it than exchanging text; is the bias held in identifiable parts of the cache; and can it be reduced by editing the cache without damaging the model's general competence?}
+
+Three groups of stakeholders are affected. People who are evaluated or served by automated systems bear the consequences of biased outputs, and these consequences are unequal across social groups, which links the problem to SDG~10. Developers and operators of multi-agent systems need to know whether optimisations such as cache sharing introduce hidden channels for unwanted information. Auditors and researchers need tools that make the runtime behaviour of models inspectable and that produce reproducible evidence. If the problem is left unaddressed, bias that enters one agent of a system could spread to others through a channel that cannot be read in the conversation transcript, and the only remedies available would remain retraining or fine-tuning, which are costly and opaque.
+
+The system takes as input a frozen open-weight model, a probe that defines a fictional group and a pair of opposing traits, the memory arm (shared cache, text only, or no contact), the semantic pressure~$\pi$ (the fraction of one-sided statements shown to the first agent), a random seed, and optionally an intervention specification. It produces a provenance-stamped trace of every cache entry, the bias index of both agents after every turn, attractor and reservoir analyses across many conversations, the contagion decomposition and phase analysis, and an accept or reject decision for each intervention together with its causal effect and coherence cost.
+
+\section{Existing system and limitations}
+Existing work touches each part of this problem but none addresses it end to end. The limitations below are drawn from the papers reviewed in Chapter~3.
+
+\textbf{KV cache efficiency methods treat structure only as a compression signal.} StreamingLLM keeps a few initial tokens because they act as attention sinks~\cite{xiao2024sinks}; H2O keeps heavy-hitter tokens that accumulate the most attention~\cite{zhang2023h2o}; Scissorhands relies on the observation that important tokens stay important~\cite{liu2023scissorhands}; and TOVA treats the cache as the state of a multi-state recurrent network and evicts the least-attended entries~\cite{oren2024msrnn}. These methods show that runtime memory is strongly structured, but they evaluate only perplexity, accuracy and throughput. None asks what information the retained entries carry or how they affect bias, and none records which turn, agent or source produced an entry.
+
+\textbf{Interpretability methods study single forward passes or weights, not evolving memory.} Causal mediation analysis localised gender bias to a small number of attention heads in GPT-2~\cite{vig2020causal}, causal tracing localised factual associations to middle-layer MLP modules~\cite{meng2022rome}, and function vectors showed that a few heads transport a compact representation of an in-context task~\cite{todd2024fv}. These studies analyse one prompt at a time, so they cannot follow how a belief builds up across the turns of a conversation or how it moves between agents.
+
+\textbf{Existing interventions modify weights or activations.} ROME edits weights to change a stored fact~\cite{meng2022rome}, and inference-time intervention shifts the outputs of selected heads to improve truthfulness~\cite{li2023iti}. Neither acts on the cached keys and values of a conversation, and inference-time intervention reports a trade-off between the targeted improvement and general helpfulness, which shows that an intervention must be checked for side effects.
+
+\textbf{Multi-agent studies measure only the exchanged text.} Multi-agent debate shows that agents strongly influence each other's answers~\cite{du2024debate}, but it treats the models as black boxes and does not consider a memory-level channel between them.
+
+\textbf{Bias benchmarks are static and single-turn.} BBQ, StereoSet and CrowS-Pairs measure bias in isolated prompts~\cite{parrish2022bbq,nadeem2021stereoset,nangia2020crows}, and TruthfulQA does the same for falsehoods~\cite{lin2022truthfulqa}. They do not measure how bias accumulates during a conversation, and when real group names are used the measured bias mixes what the model learned in training with what it was told in the conversation.
+
+\textbf{Mitigation is expensive.} The mitigation methods surveyed by Gallegos et al.~\cite{gallegos2024bias} act mostly on training data or training objectives, which requires access to large compute budgets.
+
+The gap addressed by this project is therefore the combination of four missing capabilities: recording the KV cache with full provenance over multi-turn, multi-agent conversations; testing for persistent memory structures beyond attention sinks; separating the memory channel from the text channel when bias spreads between agents; and evaluating cache-only interventions with negative controls and a coherence budget. Table~\ref{tab:gap} summarises how each family of existing work relates to these capabilities.
+
+\begin{table}[htbp]
+\centering
+\caption{Existing approaches and the gap addressed by this project}\label{tab:gap}
+\small
+\begin{tabularx}{\textwidth}{@{}L{3.2cm}YY@{}}
+\toprule
+\textbf{Family of work} & \textbf{What it shows} & \textbf{What it does not provide} \\
+\midrule
+KV cache compression~\cite{xiao2024sinks,zhang2023h2o,liu2023scissorhands,oren2024msrnn} & The cache has stable, high-attention structure (sinks, heavy hitters, persistent entries). & Any link between cache structure and behaviour; provenance of entries; multi-agent settings. \\
+Mechanistic interpretability~\cite{vig2020causal,meng2022rome,todd2024fv} & Bias, facts and tasks can be localised to a few components. & Analysis of memory that evolves across turns and agents. \\
+Weight and activation editing~\cite{meng2022rome,li2023iti} & Targeted edits can change behaviour. & Edits restricted to the runtime cache; systematic negative controls. \\
+Multi-agent interaction~\cite{du2024debate} & Agents change each other's outputs. & A mechanism below the text level. \\
+Bias benchmarks and surveys~\cite{parrish2022bbq,lin2022truthfulqa,gallegos2024bias} & How to measure bias and falsehood; taxonomy of mitigation. & Multi-turn accumulation; inference-time, memory-level mitigation. \\
+\bottomrule
+\end{tabularx}
+\end{table}

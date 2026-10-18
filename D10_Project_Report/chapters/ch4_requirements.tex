@@ -1,0 +1,91 @@
+\chapter{Requirements}
+\section{Functional requirements}
+The functional requirements describe what the framework must do to achieve the five objectives of Section~1.2. They were fixed in the design phase and refined during implementation; Table~\ref{tab:fr} lists them with the objective each serves, the expected behaviour and the acceptance criterion used to verify it. Each acceptance criterion is checked by an automated test or by an output of the experiment pipeline, as described in Appendix~A.
+
+The central actor is a researcher who configures and runs experiments through the command-line interface or the Python API. A second actor is a reviewer or member of the public who explores recorded results through the demonstration website. The frozen language model is not an actor in the usual sense but is the object under study; the framework must never modify its weights.
+
+\begin{longtable}{@{}L{1.0cm}L{1.0cm}L{6.2cm}L{5.8cm}@{}}
+\caption{Functional requirements}\label{tab:fr}\\
+\toprule
+\textbf{ID} & \textbf{Obj.} & \textbf{Requirement and expected behaviour} & \textbf{Acceptance criterion}\\\midrule\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Obj.} & \textbf{Requirement and expected behaviour} & \textbf{Acceptance criterion}\\\midrule\endhead
+FR1 & O1 & Wrap a frozen decoder-only model so that every KV cache write is intercepted and stamped with layer, head, absolute position, turn, agent and channel. & Provenance of every position matches the write context; weights unchanged after a run. \\
+FR2 & O1 & Record per-head attention received by every cache position during generation, reduced online to the statistics needed by the metrics. & Head-averaged attention rows sum to one; statistics identical on replay. \\
+FR3 & O1 & Run two-agent conversations in three memory arms: shared cache, text only and no contact (isolated control). & In the shared arm the receiver's cache contains the sender's segment with ``peer'' provenance; in the other arms it does not. \\
+FR4 & O1 & Transplant cache segments between agents with rotary position embeddings re-indexed to the receiver's positions. & Grafted layer-0 keys equal keys written natively at the same positions (tolerance $10^{-4}$). \\
+FR5 & O1 & Replay any conversation token for token from its configuration and seed. & Two runs with the same seed give identical tokens and bias. \\
+FR6 & O1 & Store traces in a columnar store with a relational index and a stratified sample of raw KV tensors. & SQLite index, Parquet fact table and checksummed manifest produced for every run. \\
+FR7 & O2 & Compute reuse, lifetime, persistence and PageRank centrality for every position and flag memory attractors, reporting sinks separately. & Metrics match analytic values on synthetic attention patterns; only the planted attractor is flagged. \\
+FR8 & O3 & Fit cross-validated probes per (layer, KV head) on attractor-pooled values, control the false discovery rate and combine AUC with measured ablation effect. & Ranked reservoir map with AUC, $p$, $q$ and ablation effect for every head. \\
+FR9 & O4 & Decompose bias transfer into memory and text contagion with bootstrap intervals and a Mann--Whitney test; fit logistic and linear models of bias against pressure. & Decomposition sums exactly to shared minus isolated bias; planted transitions detected and linear data rejected. \\
+FR10 & O5 & Apply ablation, perturbation and gating to selected cache entries during seed-matched replay, with random-head and sink-only controls. & Ablation gives zero attention to targets; perturbation leaves the stored cache unchanged. \\
+FR11 & O5 & Accept an intervention only if its effect is significant, beats both controls and stays within the coherence budget. & Rule rejects each failure mode with a named reason. \\
+FR12 & All & Present the experiment and its results to non-specialists through an interactive website that works without a server. & All demo combinations available; page loads from a single file. \\
+\bottomrule
+\end{longtable}
+
+\section{Non-functional requirements}
+The most important non-functional requirement is \textbf{reproducibility}, because a causal claim based on seed-matched replay is meaningless if the replay is not exact. Every source of randomness is seeded, the configuration that produced a run is written to a manifest together with its SHA-256 hash and the current source-control commit, and the same configuration must reproduce every reported number. This was verified by re-running the reference experiment from scratch and comparing all 135 conversations, every metric and every test statistic with the earlier run; apart from timing fields, no value differed.
+
+\textbf{Validity of analysis} is the second requirement. All detection thresholds, multiple-comparison corrections, negative controls and the coherence budget were fixed in the design document before the main runs and were not changed after the results were seen. Effects are reported with confidence intervals and $p$-values, and attention sinks are held out from the attractor class so that a well-known phenomenon is not reported as a new finding.
+
+For \textbf{performance}, the reference experiment of 135 conversations, including model training and all analyses, must complete on a laptop CPU in under fifteen minutes, and the real-model experiment must fit within the 4~GB memory of the available GPU. Both requirements were met: the reference pipeline took 12.4 minutes and the Qwen2.5-0.5B pipeline ran on the GPU in 2.4 hours (Section~6.3.8).
+
+\textbf{Portability} requires that model-specific details, namely the attention module layout, the grouped-query head mapping, the rotary embedding parameters and the tokenizer, are isolated behind a single adapter interface, so that a new model needs a configuration file rather than changes to the pipeline. Configuration files are provided for Qwen2.5-0.5B, Qwen2.5-7B, Llama-3-8B and Mistral-7B.
+
+\textbf{Usability} requires that the results can be understood by a reviewer without a background in machine learning. The demonstration website therefore explains the experiment step by step in plain language, expresses the bias index as ``how many times out of 100 the model picks the unfair word'', and keeps technical terms in optional, collapsible notes.
+
+\textbf{Privacy and ethics} require that no personal data is collected and that the experiments do not produce statements about real communities. All prompts are synthetic and all group names are invented, so the biased outputs elicited for study concern no real group. \textbf{Maintainability} requires automated tests for every module; the suite of 36 tests runs in under a minute. For \textbf{security}, the local web service binds only to the loopback address, and the public website is a static page that sends no data to any server.
+
+\section{Hardware requirements}
+Table~\ref{tab:hw} lists the hardware used in this phase together with the tier recommended in the design document for the full study on 7--8 billion parameter models. The reference model runs on the CPU; the Qwen2.5-0.5B model runs on the GPU in 32-bit floating point, because the Turing-generation GTX 1650~Ti has no native bfloat16 support. A 7--8 billion parameter model needs about 16~GB for its weights in 16-bit precision, which is why it could not be run on the available GPU.
+
+\begin{table}[htbp]
+\centering
+\caption{Hardware used and recommended}\label{tab:hw}
+\small
+\begin{tabularx}{\textwidth}{@{}L{2.6cm}YY@{}}
+\toprule
+\textbf{Component} & \textbf{Used in this phase} & \textbf{Recommended for 7--8B models} \\
+\midrule
+Processor & Intel Core i7-10750H, 6 cores, 12 threads, 2.6~GHz & 16 or more cores (workstation or cluster node) \\
+Memory & 16~GB RAM & 64--128~GB RAM \\
+GPU & NVIDIA GeForce GTX 1650~Ti, 4~GB, compute capability 7.5 & 24~GB or more (for example NVIDIA L4, A10, A100) \\
+Storage & SSD; 94~MB for both result directories & 500~GB to 2~TB NVMe for full raw-KV samples \\
+Network & Needed once to download model weights & Same \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Software and data requirements}
+The framework is written in Python and packaged as the installable \texttt{rcm} package with a command-line entry point. Table~\ref{tab:sw} lists the software and the versions used for the reported results.
+
+\begin{table}[htbp]
+\centering
+\caption{Software used for the reported results}\label{tab:sw}
+\small
+\begin{tabularx}{\textwidth}{@{}L{3.6cm}L{2.4cm}Y@{}}
+\toprule
+\textbf{Software} & \textbf{Version} & \textbf{Purpose} \\
+\midrule
+Windows & 11 & Operating system of the development laptop \\
+Python & 3.14 & Implementation language \\
+PyTorch~\cite{paszke2019pytorch} & 2.13 (CUDA 13.0) & Tensors, hooks, reference model, GPU execution \\
+Hugging Face Transformers~\cite{wolf2020transformers} & 5.17 & Loading frozen models; base class of the tracing cache \\
+NumPy / SciPy & 2.5 / 1.18 & Metrics, curve fitting, statistics \\
+scikit-learn~\cite{pedregosa2011sklearn} & 1.9 & Logistic probes, cross-validated AUC \\
+NetworkX & 3.6 & Reference check of PageRank centrality \\
+pandas / PyArrow & 3.0 / 25.0 & Trace tables and Parquet storage \\
+SQLite & bundled with Python & Trace index \\
+Matplotlib & 3.11 & Report figures \\
+FastAPI / Uvicorn & 0.141 / 0.52 & Local trace service and web server \\
+pytest & 7.4 & Automated tests \\
+Cloudflare Pages & -- & Hosting of the public demonstration website \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The project consumes two kinds of data. The first is a \emph{probe bank} generated by the framework: twelve bias probes in four bias categories (gender, religion, disability and socio-economic status), each pairing a stereotyped group with a reference group and a negative trait with a positive one, written in the formats of BBQ, StereoSet and CrowS-Pairs~\cite{parrish2022bbq,nadeem2021stereoset,nangia2020crows}, together with four factual questions in the style of TruthfulQA~\cite{lin2022truthfulqa}. Group names are fictional (for example Vorlan, Tessic, Brimor and Quenda), while traits and factual questions use ordinary English. The second is the \emph{training corpus} of the reference model: 4,000 synthetic documents of 96 tokens over a 50-token vocabulary, in which 85\% of documents are consistent with the planted stereotype and each group--trait sentence agrees with its document's polarity with probability 0.9, and a quarter of the documents repeat one sentence so that the copying circuits needed for in-context use form during training~\cite{olsson2022induction}. The real-model experiment additionally requires the Qwen2.5-0.5B-Instruct weights, which are released under the Apache-2.0 licence and were downloaded once from Hugging Face.
+
+The project produces its own data: for each experiment, a trace store with a SQLite index, a Parquet table of per-position statistics for every conversation, raw key and value tensors for a stratified sample of six conversations (two per memory arm), a results file, six figures and a manifest. The reference run occupies 18~MB and the Qwen2.5-0.5B run 76~MB.
